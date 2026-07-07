@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meeting Finder</title>
+<style>
+:root{
+  --ink:#1b1d2a; --ink-soft:#4a4d63; --muted:#7c7f92;
+  --paper:#f6f5f1; --surface:#ffffff; --line:#e6e4dc; --line-strong:#d4d1c6;
+  --go:#178a63; --go-ink:#0e5c41;
+  --warn:#c98a2b; --busy:#c0605f;
+  --focus:#3b4bd8;
+  --mono:ui-monospace,"SFMono-Regular","Cascadia Code","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --shadow:0 1px 2px rgba(27,29,42,.06),0 8px 24px rgba(27,29,42,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  font-family:var(--sans); color:var(--ink); background:var(--paper);
+  font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+}
+.eyebrow{font:600 10.5px/1 var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+button{font-family:inherit}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* ---------- shell ---------- */
+.app{display:flex; flex-direction:column; height:100vh; min-height:0}
+header.top{
+  display:flex; align-items:center; gap:16px; padding:12px 20px;
+  background:var(--surface); border-bottom:1px solid var(--line); flex:0 0 auto;
+}
+.brand{display:flex; align-items:baseline; gap:10px}
+.brand h1{margin:0; font-size:19px; font-weight:700; letter-spacing:-.02em}
+.brand .sub{font:500 11px/1 var(--mono); color:var(--muted); letter-spacing:.04em}
+.chip{
+  font:600 11px/1 var(--mono); letter-spacing:.03em; color:var(--go-ink);
+  background:#e9f4ef; border:1px solid #cfe8dd; padding:5px 9px; border-radius:999px;
+  display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
+}
+.chip b{font-weight:700}
+.top .spacer{flex:1}
+.tabs{display:flex; gap:2px; background:var(--paper); padding:3px; border-radius:9px; border:1px solid var(--line)}
+.tab{
+  border:0; background:transparent; color:var(--ink-soft); font-weight:600; font-size:13px;
+  padding:6px 13px; border-radius:6px; cursor:pointer;
+}
+.tab[aria-selected="true"]{background:var(--surface); color:var(--ink); box-shadow:var(--shadow)}
+.btn{
+  border:1px solid var(--line-strong); background:var(--surface); color:var(--ink);
+  font-weight:600; font-size:13px; padding:7px 12px; border-radius:8px; cursor:pointer;
+  display:inline-flex; align-items:center; gap:7px;
+}
+.btn:hover{border-color:var(--ink-soft)}
+.btn.ghost{border-color:transparent; background:transparent; color:var(--ink-soft); padding:6px 8px}
+.btn.ghost:hover{background:var(--paper)}
+.btn svg{width:15px;height:15px}
+
+main{flex:1; min-height:0; display:flex}
+.pane{display:none; flex:1; min-height:0}
+.pane.active{display:flex}
+
+/* ---------- roster ---------- */
+.roster{
+  flex:0 0 258px; border-right:1px solid var(--line); background:var(--surface);
+  display:flex; flex-direction:column; min-height:0;
+}
+.roster .head{padding:14px 16px 10px; border-bottom:1px solid var(--line)}
+.roster .head .row{display:flex; align-items:center; justify-content:space-between}
+.searchwrap{position:relative; margin-top:10px}
+.searchwrap svg{position:absolute; left:9px; top:50%; transform:translateY(-50%); width:14px;height:14px; color:var(--muted)}
+.search{
+  width:100%; padding:8px 10px 8px 30px; border:1px solid var(--line-strong); border-radius:8px;
+  font-size:13px; background:var(--paper);
+}
+.search:focus{outline:2px solid var(--focus); outline-offset:-1px; background:var(--surface)}
+.selactions{display:flex; gap:6px; margin-top:9px}
+.selactions .btn{padding:5px 9px; font-size:12px; flex:1; justify-content:center}
+.rlist{flex:1; overflow-y:auto; padding:6px 8px}
+.ritem{
+  display:flex; align-items:center; gap:9px; padding:7px 8px; border-radius:8px; cursor:pointer;
+  user-select:none;
+}
+.ritem:hover{background:var(--paper)}
+.ritem.sel{background:#eef7f2}
+.ritem input{position:absolute; opacity:0; pointer-events:none}
+.box{
+  width:17px;height:17px;border-radius:5px;border:1.5px solid var(--line-strong);
+  flex:0 0 auto; display:grid; place-items:center; background:var(--surface); transition:.12s;
+}
+.ritem.sel .box{background:var(--go); border-color:var(--go)}
+.box svg{width:11px;height:11px;color:#fff; opacity:0; transform:scale(.6); transition:.12s}
+.ritem.sel .box svg{opacity:1; transform:scale(1)}
+.ritem .nm{font-size:13.5px; font-weight:500; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.ritem .load{font:600 10px/1 var(--mono); color:var(--muted); letter-spacing:.03em}
+.ritem.empty .nm{color:var(--muted)}
+.ritem .busycount{font:600 10.5px/1 var(--mono); color:var(--muted)}
+
+/* ---------- workspace ---------- */
+.work{flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden}
+.controls{
+  flex:0 0 auto; display:flex; flex-wrap:wrap; gap:18px 26px; align-items:flex-end;
+  padding:14px 22px; border-bottom:1px solid var(--line); background:var(--surface);
+}
+.ctl{display:flex; flex-direction:column; gap:6px}
+.ctl > .eyebrow{margin-bottom:1px}
+.seg{display:flex; border:1px solid var(--line-strong); border-radius:8px; overflow:hidden}
+.seg button{
+  border:0; background:var(--surface); padding:6px 11px; font-size:12.5px; font-weight:600;
+  color:var(--ink-soft); cursor:pointer; border-right:1px solid var(--line);
+}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink); color:#fff}
+.daytoggle{display:flex; gap:4px}
+.daytoggle button{
+  width:30px; height:30px; border:1px solid var(--line-strong); background:var(--surface);
+  border-radius:7px; font:600 12px/1 var(--sans); color:var(--ink-soft); cursor:pointer;
+}
+.daytoggle button[aria-pressed="true"]{background:var(--ink); color:#fff; border-color:var(--ink)}
+select.mini{
+  border:1px solid var(--line-strong); border-radius:8px; padding:6px 8px; font-size:12.5px;
+  font-weight:600; background:var(--surface); color:var(--ink);
+}
+.timewin{display:flex; align-items:center; gap:7px; font:600 12.5px/1 var(--mono)}
+.timewin select{font:600 12px/1 var(--mono)}
+
+/* results + grid area */
+.results{flex:1; min-height:0; display:grid; grid-template-columns:minmax(320px,1fr) minmax(340px,420px); gap:0}
+.bestcol{min-height:0; overflow-y:auto; padding:18px 22px; border-right:1px solid var(--line)}
+.gridcol{min-height:0; overflow:hidden; display:flex; flex-direction:column; background:var(--surface)}
+
+.sectlabel{display:flex; align-items:baseline; gap:10px; margin:0 0 12px}
+.sectlabel h2{margin:0; font-size:15px; font-weight:700; letter-spacing:-.01em}
+.sectlabel .count{font:600 11px/1 var(--mono); color:var(--muted)}
+
+.win{
+  border:1px solid var(--line); border-radius:11px; padding:12px 14px; margin-bottom:10px;
+  background:var(--surface); box-shadow:var(--shadow); cursor:default;
+}
+.win.full{border-color:#bfe3d3; background:linear-gradient(180deg,#f3faf6,#ffffff)}
+.win .wtop{display:flex; align-items:center; justify-content:space-between; gap:12px}
+.win .when{font-size:15px; font-weight:700; letter-spacing:-.01em}
+.win .when .day{color:var(--go-ink)}
+.win.partial .when .day{color:var(--ink)}
+.win .dur{font:600 11px/1 var(--mono); color:var(--muted); letter-spacing:.02em}
+.win .avail{
+  display:inline-flex; align-items:center; gap:6px; margin-top:9px; font-size:12.5px; font-weight:600;
+}
+.win .avail .pill{font:700 11px/1 var(--mono); padding:3px 7px; border-radius:6px}
+.win.full .pill{background:#dcf1e8; color:var(--go-ink)}
+.win.partial .pill{background:#f7ecd7; color:var(--warn)}
+.win .blockers{margin-top:8px; font-size:12.5px; color:var(--ink-soft)}
+.win .blockers b{color:var(--busy); font-weight:600}
+.win .blockers .who{
+  display:inline-block; margin:3px 5px 0 0; padding:2px 7px; border-radius:6px;
+  background:#faeeee; color:#a8474a; font-size:12px; font-weight:500;
+}
+.win .blockers .who span{font:600 10.5px/1 var(--mono); opacity:.75; margin-left:5px}
+
+.empty-state{
+  border:1.5px dashed var(--line-strong); border-radius:12px; padding:26px 20px; text-align:center;
+  color:var(--muted); background:var(--surface);
+}
+.empty-state h3{margin:0 0 5px; color:var(--ink-soft); font-size:14px}
+.empty-state p{margin:0; font-size:13px}
+
+/* heatmap grid */
+.gridhead{
+  flex:0 0 auto; display:flex; align-items:baseline; justify-content:space-between;
+  padding:14px 18px 10px;
+}
+.gridhead h2{margin:0; font-size:14px; font-weight:700}
+.legend{display:flex; align-items:center; gap:8px; font:600 10.5px/1 var(--mono); color:var(--muted)}
+.legend .ramp{display:flex; border-radius:4px; overflow:hidden; border:1px solid var(--line)}
+.legend .ramp i{width:15px; height:11px; display:block}
+.gridscroll{flex:1; min-height:0; overflow:auto; padding:0 14px 16px}
+table.heat{border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed}
+table.heat th.corner{width:52px}
+table.heat thead th{
+  position:sticky; top:0; z-index:3; background:var(--surface);
+  font:600 11.5px/1 var(--sans); color:var(--ink-soft); padding:7px 4px 9px; text-align:center;
+  border-bottom:1px solid var(--line-strong);
+}
+table.heat td.time, table.heat th.corner{
+  position:sticky; left:0; z-index:2; background:var(--surface);
+  font:600 10.5px/1 var(--mono); color:var(--muted); text-align:right; padding:0 8px 0 4px;
+  white-space:nowrap; width:52px;
+}
+table.heat td.time.hour{color:var(--ink); border-top:1px solid var(--line)}
+table.heat tbody td{height:15px; border-right:1px solid rgba(230,228,220,.5)}
+table.heat tbody tr.hour td{border-top:1px solid var(--line)}
+.cell{height:15px; position:relative; cursor:pointer}
+.cell.cand{box-shadow:inset 0 0 0 1.4px var(--go)}
+.cell.cand.partial{box-shadow:inset 0 0 0 1.4px var(--warn)}
+.cell:hover{outline:2px solid var(--ink); outline-offset:-2px; z-index:1}
+
+/* popover */
+.pop{
+  position:fixed; z-index:50; width:250px; background:var(--surface); border:1px solid var(--line-strong);
+  border-radius:11px; box-shadow:0 12px 40px rgba(27,29,42,.18); padding:12px 13px; font-size:13px;
+}
+.pop h4{margin:0 0 2px; font-size:13.5px}
+.pop .sub{font:600 10.5px/1 var(--mono); color:var(--muted); letter-spacing:.03em; margin-bottom:9px}
+.pop .grp{margin-top:8px}
+.pop .grp .lbl{display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px}
+.pop .grp.free .lbl{color:var(--go-ink)} .pop .grp.busy .lbl{color:var(--busy)}
+.pop .grp .lbl .n{font-family:var(--mono); font-weight:600}
+.pop ul{margin:0; padding:0; list-style:none; max-height:120px; overflow-y:auto}
+.pop li{padding:2px 0; font-size:12.5px; display:flex; justify-content:space-between; gap:8px}
+.pop li span{font:500 11px/1 var(--mono); color:var(--muted); text-align:right; flex:0 0 auto}
+
+/* ---------- schedules tab ---------- */
+.schedwrap{flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden}
+.schedbar{
+  flex:0 0 auto; display:flex; align-items:center; gap:14px; padding:14px 22px;
+  border-bottom:1px solid var(--line); background:var(--surface); flex-wrap:wrap;
+}
+.schedbar select{min-width:200px}
+.hint{font-size:12px; color:var(--muted)}
+.edithint{font:600 11px/1 var(--mono); color:var(--muted)}
+.schedscroll{flex:1; min-height:0; overflow:auto; padding:20px 22px}
+table.sched{border-collapse:separate; border-spacing:0; table-layout:fixed}
+table.sched th{
+  position:sticky; top:0; z-index:2; background:var(--surface); font-size:12px; font-weight:700;
+  color:var(--ink-soft); padding:8px 6px; border-bottom:1px solid var(--line-strong); text-align:center; width:118px;
+}
+table.sched td.time{
+  position:sticky; left:0; background:var(--surface); font:600 10.5px/1 var(--mono); color:var(--muted);
+  text-align:right; padding:0 9px 0 2px; white-space:nowrap; width:56px;
+}
+table.sched td.time.hour{color:var(--ink)}
+table.sched tbody tr.hour td{border-top:1px solid var(--line)}
+.scell{
+  height:16px; border-right:1px solid rgba(230,228,220,.6); cursor:pointer; position:relative;
+  padding:0 5px; font-size:10.5px; color:#fff; overflow:hidden; white-space:nowrap;
+}
+.scell.busy{background:var(--busy)}
+.scell.busy.start{font-weight:600}
+.scell.free:hover{background:#eef7f2}
+.scell.busy:hover{filter:brightness(1.06)}
+
+footer.foot{
+  flex:0 0 auto; display:flex; align-items:center; gap:14px; padding:8px 20px;
+  border-top:1px solid var(--line); background:var(--surface); font-size:11.5px; color:var(--muted);
+}
+footer.foot .spacer{flex:1}
+footer.foot a, footer.foot button.link{color:var(--ink-soft); background:none; border:0; cursor:pointer; font:inherit; text-decoration:underline; padding:0}
+input[type=file]{display:none}
+
+.roster-empty{color:var(--muted); font-size:13px; padding:18px 12px; text-align:center; line-height:1.6}
+.linklike{border:0; background:transparent; color:var(--go-ink); font:inherit; font-weight:700; cursor:pointer; text-decoration:underline; padding:0}
+.modal-backdrop{position:fixed; inset:0; background:rgba(27,29,42,.42); display:flex; align-items:center; justify-content:center; z-index:100; padding:20px}
+.modal-backdrop[hidden]{display:none}
+.modal{background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:0 24px 70px rgba(27,29,42,.30); width:min(560px,100%); max-height:90vh; overflow:auto}
+.modal-hd{display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--line)}
+.modal-hd h2{margin:0; font-size:17px; font-weight:700; letter-spacing:-.01em}
+.modal-hd .x{border:0; background:transparent; font-size:24px; line-height:1; color:var(--muted); cursor:pointer; border-radius:8px; padding:0 8px}
+.modal-hd .x:hover{background:var(--paper); color:var(--ink)}
+.modal-bd{padding:18px 20px}
+.loadopt .mnote{font-size:12.5px; color:var(--muted); margin:5px 0 10px; line-height:1.5}
+.loadopt textarea{width:100%; height:132px; border:1px solid var(--line-strong); border-radius:10px; padding:10px; font:12px/1.5 var(--mono); background:var(--paper); color:var(--ink-soft); resize:vertical; white-space:pre; overflow:auto; margin-bottom:11px}
+.loadopt textarea:focus{outline:2px solid var(--focus); outline-offset:-1px; background:var(--surface)}
+.loaddiv{display:flex; align-items:center; text-align:center; color:var(--muted); font:600 11px/1 var(--mono); letter-spacing:.14em; margin:18px 0}
+.loaddiv::before,.loaddiv::after{content:""; flex:1; height:1px; background:var(--line)}
+.loaddiv span{padding:0 12px; text-transform:uppercase}
+.toast{
+  position:fixed; bottom:18px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--ink); color:#fff; padding:10px 16px; border-radius:10px; font-size:13px; font-weight:600;
+  opacity:0; pointer-events:none; transition:.25s; z-index:80; box-shadow:var(--shadow);
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+@media (max-width:1080px){ .results{grid-template-columns:1fr} .gridcol{border-top:1px solid var(--line)} }
+@media (max-width:720px){
+  header.top{flex-wrap:wrap; gap:10px 12px; padding:10px 14px}
+  .top .spacer{display:none}
+  .brand h1{font-size:17px}
+  #pane-find{flex-direction:column}
+  .roster{flex:0 0 auto; max-height:38vh; border-right:0; border-bottom:1px solid var(--line)}
+  .controls{gap:12px 16px; padding:12px 14px}
+  .bestcol{border-right:0; border-bottom:1px solid var(--line)}
+}
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Meeting Finder</h1>
+      <span class="sub">find when everyone's free</span>
+    </div>
+    <span class="chip" id="datasetChip"><b id="dsLabel">—</b> · <span id="dsCount">0</span> people</span>
+    <div class="spacer"></div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-tab="find">Find a time</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="sched">Schedules</button>
+    </div>
+    <button class="btn" id="loadBtn" title="Load schedules by paste or workbook upload">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+      Load schedules
+    </button>
+    <input type="file" id="fileInput" accept=".xlsx">
+  </header>
+
+  <main>
+    <!-- FIND TAB -->
+    <div class="pane active" id="pane-find">
+      <aside class="roster">
+        <div class="head">
+          <div class="row">
+            <span class="eyebrow">People</span>
+            <span class="eyebrow" id="selCount">0 selected</span>
+          </div>
+          <div class="searchwrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input class="search" id="rosterSearch" placeholder="Search people…" autocomplete="off">
+          </div>
+          <div class="selactions">
+            <button class="btn" id="selAll">Select all</button>
+            <button class="btn" id="selNone">Clear</button>
+          </div>
+        </div>
+        <div class="rlist" id="rosterList"></div>
+      </aside>
+
+      <section class="work">
+        <div class="controls">
+          <div class="ctl">
+            <span class="eyebrow">Meeting length</span>
+            <select class="mini" id="minLen">
+              <option value="30">30 min</option>
+              <option value="45">45 min</option>
+              <option value="60" selected>1 hour</option>
+              <option value="90">1.5 hours</option>
+              <option value="120">2 hours</option>
+            </select>
+          </div>
+          <div class="ctl">
+            <span class="eyebrow">Everyone must be free</span>
+            <div class="seg" id="thresholdSeg" role="group">
+              <button data-slack="0" aria-pressed="true">All</button>
+              <button data-slack="1" aria-pressed="false">All&nbsp;but&nbsp;1</button>
+              <button data-slack="2" aria-pressed="false">All&nbsp;but&nbsp;2</button>
+            </div>
+          </div>
+          <div class="ctl">
+            <span class="eyebrow">Days</span>
+            <div class="daytoggle" id="dayToggle"></div>
+          </div>
+          <div class="ctl">
+            <span class="eyebrow">Time window</span>
+            <div class="timewin">
+              <select class="mini" id="startWin"></select>
+              <span>to</span>
+              <select class="mini" id="endWin"></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="results">
+          <div class="bestcol">
+            <div class="sectlabel">
+              <h2>Best times</h2>
+              <span class="count" id="winCount"></span>
+            </div>
+            <div id="winList"></div>
+          </div>
+          <div class="gridcol">
+            <div class="gridhead">
+              <h2>Availability</h2>
+              <div class="legend">
+                <span>busy</span>
+                <span class="ramp" id="ramp"></span>
+                <span>all free</span>
+              </div>
+            </div>
+            <div class="gridscroll"><table class="heat" id="heat"></table></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- SCHEDULES TAB -->
+    <div class="pane" id="pane-sched">
+      <div class="schedwrap">
+        <div class="schedbar">
+          <div class="ctl" style="gap:5px">
+            <span class="eyebrow">View person</span>
+            <select class="mini" id="schedPick"></select>
+          </div>
+          <span class="edithint">Click any cell to mark it busy or free · changes flow into “Find a time”.</span>
+          <div class="spacer" style="flex:1"></div>
+          <button class="btn" id="addPerson">+ Add person</button>
+          <button class="btn ghost" id="renamePerson">Rename</button>
+        </div>
+        <div class="schedscroll"><table class="sched" id="schedTable"></table></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <span>Runs entirely in your browser. Nothing is uploaded, and no data is stored.</span>
+    <span class="spacer"></span>
+    <button class="link" id="exportJson">Save edits (.json)</button>
+    <button class="link" id="importJson">Load saved (.json)</button>
+    <input type="file" id="jsonInput" accept=".json">
+  </footer>
+</div>
+<div class="modal-backdrop" id="loader" hidden>
+  <div class="modal">
+    <div class="modal-hd">
+      <h2>Load schedules</h2>
+      <button class="x" id="loaderClose" title="Close">&times;</button>
+    </div>
+    <div class="modal-bd">
+      <div class="loadopt">
+        <div class="eyebrow">Option 1: Paste the Schedule table</div>
+        <p class="mnote">Copy rows from the <b>Schedule</b> tab (header row optional) and paste below. Columns: Person, Day, Start, End, Type, Note.</p>
+        <textarea id="pasteBox" spellcheck="false" placeholder="Person&#9;Day&#9;Start&#9;End&#9;Type&#9;Note&#10;Jordan Rivera&#9;Monday&#9;8:00 AM&#9;9:00 AM&#9;Class&#9;Bio 101"></textarea>
+        <button class="btn primary" id="pasteLoad">Load pasted rows</button>
+      </div>
+      <div class="loaddiv"><span>or</span></div>
+      <div class="loadopt">
+        <div class="eyebrow">Option 2: Upload the workbook</div>
+        <p class="mnote">Reads only the <b>Schedule</b> tab from <b>SCSJ_Schedules.xlsx</b>. Nothing is uploaded to a server.</p>
+        <button class="btn" id="uploadBtn">Choose .xlsx file…</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+"use strict";
+/* ============ DATA (embedded) ============ */
+const DATA = null;  // no pre-loaded schedules; data comes from paste or the Schedule tab
+
+/* ============ MODEL ============ */
+let META, STUDENTS, BUSY; // BUSY[i] = Uint8 [day*nSlot + slot]
+let nSlot, nDay;
+
+function buildModel(data){
+  META = data.meta;
+  nSlot = META.slots.length; nDay = META.days.length;
+  STUDENTS = data.students.map(s=>({name:s.name, sheet:s.sheet||"", blocks:s.blocks.map(b=>({...b}))}));
+  rebuildBusy();
+}
+function rebuildBusy(){
+  BUSY = STUDENTS.map(s=>{
+    const g = new Uint8Array(nDay*nSlot);
+    for(const b of s.blocks){
+      for(let sl=b.start; sl<=b.end; sl++) g[b.day*nSlot+sl]=1;
+    }
+    return {g, labels:s.blocks};
+  });
+}
+function labelAt(i, day, slot){
+  for(const b of STUDENTS[i].blocks){ if(b.day===day && slot>=b.start && slot<=b.end) return b.label||"Busy"; }
+  return null;
+}
+
+/* ============ STATE ============ */
+const STATE = {
+  selected:new Set(),
+  minLen:60,
+  slack:0,               // 0 = all free, 1 = all but one …
+  days:new Set([0,1,2,3,4]), // Mon–Fri default
+  startSlot:0, endSlot:0, // set after model
+  filter:"",
+  schedIdx:0,
+};
+
+/* ============ HELPERS ============ */
+const el = (t,c,txt)=>{const e=document.createElement(t); if(c)e.className=c; if(txt!=null)e.textContent=txt; return e;};
+const slotStartMin = s => { const [h,m]=META.slots[s].t.split(":").map(Number); return h*60+m; };
+const slotEndMin = s => slotStartMin(s)+META.slots[s].mins;
+function fmtDur(mins){ const h=Math.floor(mins/60), m=mins%60; return h?(m?`${h}h ${m}m`:`${h}h`):`${m}m`; }
+function fmtRange(s0,s1){ // inclusive slot range -> "8:00–9:30 AM"
+  const a=META.slots[s0].label, b=minToLabel(slotEndMin(s1));
+  return `${a.replace(/\s?[AP]M$/i, m=> (a.slice(-2)===b.slice(-2)?"":m))}–${b}`;
+}
+function minToLabel(mins){
+  let h=Math.floor(mins/60), m=mins%60, ap=h>=12?"PM":"AM"; let hh=h%12; if(hh===0)hh=12;
+  return `${hh}:${String(m).padStart(2,"0")} ${ap}`;
+}
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2200); }
+
+/* availability colour: fraction 0..1 -> hsl */
+function availColor(f){
+  if(f<=0) return "#f1ede9";
+  const L = 96 - 54*f, S = 24 + 34*f;
+  return `hsl(158 ${S}% ${L}%)`;
+}
+function availText(f){ return f>0.62 ? "#fff" : "var(--ink-soft)"; }
+
+/* ============ CORE COMPUTE ============ */
+function selectedIdx(){ return [...STATE.selected]; }
+
+// free count per (day,slot) across selected
+function freeGrid(){
+  const sel = selectedIdx(), n=sel.length;
+  const free = new Int16Array(nDay*nSlot);
+  for(let d=0; d<nDay; d++) for(let s=0;s<nSlot;s++){
+    let f=0; const k=d*nSlot+s;
+    for(const i of sel){ if(!BUSY[i].g[k]) f++; }
+    free[k]=f;
+  }
+  return {free, n};
+}
+
+// contiguous windows meeting: within active days, within time window, free>=threshold every slot, duration>=minLen
+function findWindows(free, n){
+  const need = Math.max(1, n - STATE.slack);
+  const wins=[];
+  for(let d=0; d<nDay; d++){
+    if(!STATE.days.has(d)) continue;
+    let run=null;
+    for(let s=STATE.startSlot; s<=STATE.endSlot; s++){
+      const f = free[d*nSlot+s];
+      const ok = n>0 && f>=need;
+      if(ok){ if(!run) run={s0:s,s1:s}; else run.s1=s; }
+      if(!ok || s===STATE.endSlot){
+        if(run){
+          const s1 = ok ? run.s1 : run.s1; // run ended
+          const dur = slotEndMin(run.s1)-slotStartMin(run.s0);
+          if(dur>=STATE.minLen) wins.push(makeWin(d, run.s0, run.s1, free, n));
+          run=null;
+        }
+      }
+    }
+  }
+  // rank: fully-free first, then longer, then earlier
+  wins.sort((a,b)=> (b.fullyFree-a.fullyFree) || (b.dur-a.dur) || (a.day-b.day) || (a.s0-b.s0));
+  return wins;
+}
+
+function makeWin(day, s0, s1, free, n){
+  let minFree=Infinity, fullyFree=true;
+  for(let s=s0;s<=s1;s++){ const f=free[day*nSlot+s]; if(f<minFree)minFree=f; if(f<n)fullyFree=false; }
+  // blockers: any selected person busy at some slot in window, with their busy sub-range
+  const blockers=[];
+  for(const i of selectedIdx()){
+    let bs=null;
+    for(let s=s0;s<=s1;s++){ if(BUSY[i].g[day*nSlot+s]){ if(bs==null)bs=s; } }
+    if(bs!=null){
+      // collect contiguous busy sub-intervals
+      const ivs=[]; let cur=null;
+      for(let s=s0;s<=s1;s++){ const busy=BUSY[i].g[day*nSlot+s];
+        if(busy){ if(!cur)cur={a:s,b:s}; else cur.b=s; } else { if(cur){ivs.push(cur);cur=null;} } }
+      if(cur)ivs.push(cur);
+      blockers.push({i, ivs});
+    }
+  }
+  return {day,s0,s1,dur:slotEndMin(s1)-slotStartMin(s0),minFree,fullyFree,n,blockers};
+}
+
+/* ============ RENDER: roster ============ */
+function busyMinutes(i){ let m=0; for(let k=0;k<BUSY[i].g.length;k++) if(BUSY[i].g[k]) m+=META.slots[k%nSlot].mins; return m; }
+function renderRoster(){
+  const list=document.getElementById("rosterList"); list.innerHTML="";
+  if(!STUDENTS.length){
+    const es=el("div","roster-empty");
+    es.innerHTML='No schedules loaded. <button class="linklike" id="rosterLoad">Load schedules</button>';
+    list.append(es);
+    es.querySelector("#rosterLoad").addEventListener("click",openLoader);
+    document.getElementById("selCount").textContent="0 selected";
+    document.getElementById("dsCount").textContent="0";
+    return;
+  }
+  const q=STATE.filter.toLowerCase();
+  STUDENTS.forEach((s,i)=>{
+    if(q && !s.name.toLowerCase().includes(q)) return;
+    const sel=STATE.selected.has(i);
+    const empty=s.blocks.length===0;
+    const it=el("div","ritem"+(sel?" sel":"")+(empty?" empty":"")); it.dataset.i=i; it.tabIndex=0; it.role="checkbox"; it.setAttribute("aria-checked",sel);
+    const box=el("div","box"); box.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+    const nm=el("div","nm",s.name);
+    const meta = empty ? el("span","load","no schedule") : el("span","busycount", fmtDur(busyMinutes(i)).replace(/\s/,""));
+    it.append(box,nm,meta);
+    it.addEventListener("click",()=>toggleSel(i));
+    it.addEventListener("keydown",e=>{ if(e.key===" "||e.key==="Enter"){e.preventDefault(); toggleSel(i);} });
+    list.append(it);
+  });
+  document.getElementById("selCount").textContent = `${STATE.selected.size} selected`;
+  document.getElementById("dsCount").textContent = STUDENTS.length;
+}
+function toggleSel(i){ if(STATE.selected.has(i))STATE.selected.delete(i); else STATE.selected.add(i); renderRoster(); renderFind(); }
+
+/* ============ RENDER: controls scaffolding ============ */
+function renderDayToggle(){
+  const wrap=document.getElementById("dayToggle"); wrap.innerHTML="";
+  META.days.forEach((d,idx)=>{
+    const b=el("button",null,d.trim()[0]); b.title=d.trim();
+    b.setAttribute("aria-pressed", STATE.days.has(idx));
+    b.addEventListener("click",()=>{ STATE.days.has(idx)?STATE.days.delete(idx):STATE.days.add(idx); b.setAttribute("aria-pressed",STATE.days.has(idx)); renderFind(); });
+    wrap.append(b);
+  });
+}
+function fillTimeSelects(){
+  const ss=document.getElementById("startWin"), es=document.getElementById("endWin");
+  ss.innerHTML=""; es.innerHTML="";
+  META.slots.forEach((sl,i)=>{ const o=el("option",null,sl.label); o.value=i; ss.append(o); });
+  META.slots.forEach((sl,i)=>{ const o=el("option",null,minToLabel(slotEndMin(i))); o.value=i; es.append(o); });
+  ss.value=STATE.startSlot; es.value=STATE.endSlot;
+  ss.addEventListener("change",()=>{ STATE.startSlot=Math.min(+ss.value,STATE.endSlot); ss.value=STATE.startSlot; renderFind(); });
+  es.addEventListener("change",()=>{ STATE.endSlot=Math.max(+es.value,STATE.startSlot); es.value=STATE.endSlot; renderFind(); });
+}
+function renderRamp(){
+  const r=document.getElementById("ramp"); r.innerHTML="";
+  for(let k=0;k<=5;k++){ const i=el("i"); i.style.background=availColor(k/5); r.append(i); }
+}
+
+/* ============ RENDER: find (results + grid) ============ */
+function renderFind(){
+  const {free,n}=freeGrid();
+  renderWindows(free,n);
+  renderHeat(free,n);
+}
+
+function renderWindows(free,n){
+  const host=document.getElementById("winList"); host.innerHTML="";
+  const cnt=document.getElementById("winCount");
+  if(n===0){
+    cnt.textContent="";
+    const es=el("div","empty-state");
+    if(!STUDENTS.length){
+      es.innerHTML='<h3>No schedules loaded</h3><p>Paste the Schedule table or upload the workbook to get started.</p>';
+      const b=el("button","btn primary","Load schedules"); b.style.marginTop="12px"; b.addEventListener("click",openLoader); es.append(b);
+    } else {
+      es.innerHTML="<h3>Pick who needs to meet</h3><p>Select two or more people on the left to see when they’re all free.</p>";
+    }
+    host.append(es); return;
+  }
+  const wins=findWindows(free,n);
+  cnt.textContent = `${wins.length} option${wins.length===1?"":"s"} · ${n} selected`;
+  if(wins.length===0){
+    const es=el("div","empty-state");
+    const needStr = STATE.slack? `${Math.max(1,n-STATE.slack)} of ${n}` : "all "+n;
+    es.innerHTML=`<h3>No ${fmtDur(STATE.minLen)} window works</h3><p>Nobody has a shared ${fmtDur(STATE.minLen)} gap where ${needStr} are free under these filters. Try “All but 1”, a shorter length, or more days.</p>`;
+    host.append(es); return;
+  }
+  wins.slice(0,40).forEach(w=>host.append(winCard(w)));
+}
+
+function winCard(w){
+  const card=el("div","win "+(w.fullyFree?"full":"partial"));
+  const top=el("div","wtop");
+  const when=el("div","when"); when.innerHTML=`<span class="day">${META.days[w.day].trim()}</span> · ${fmtRange(w.s0,w.s1)}`;
+  const dur=el("div","dur",fmtDur(w.dur));
+  top.append(when,dur); card.append(top);
+  const avail=el("div","avail");
+  const pill=el("span","pill");
+  if(w.fullyFree){ pill.textContent=`all ${w.n} free`; avail.append(pill); }
+  else{ pill.textContent=`${w.minFree}/${w.n} free`; avail.append(pill); }
+  card.append(avail);
+  if(w.blockers.length){
+    const bl=el("div","blockers");
+    bl.append(document.createTextNode(w.fullyFree?"":"Busy here: "));
+    w.blockers.forEach(b=>{
+      const who=el("span","who");
+      const ivs=b.ivs.map(v=>`${META.slots[v.a].label}`.replace(/\s?[AP]M$/,"")+`–`+minToLabel(slotEndMin(v.b)).replace(/\s?[AP]M$/,"")).join(", ");
+      who.innerHTML = STUDENTS[b.i].name.split(" ")[0]+`<span>${ivs}</span>`;
+      bl.append(who);
+    });
+    if(!w.fullyFree) card.append(bl);
+  }
+  return card;
+}
+
+let heatBuilt=false;
+function renderHeat(free,n){
+  const t=document.getElementById("heat");
+  if(!heatBuilt){ buildHeatSkeleton(t); heatBuilt=true; }
+  const need=Math.max(1,n-STATE.slack);
+  for(let d=0; d<nDay; d++){
+    for(let s=0;s<nSlot;s++){
+      const cell = t._cells[d*nSlot+s];
+      const inWin = STATE.days.has(d) && s>=STATE.startSlot && s<=STATE.endSlot;
+      const f = n? free[d*nSlot+s]/n : 0;
+      cell.style.background = (n&&inWin)? availColor(f) : (inWin? "#faf8f5":"#f0eeea");
+      cell.style.opacity = inWin? "1":".45";
+      cell.className = "cell" + ((n&&inWin&&free[d*nSlot+s]>=need)?" cand"+(free[d*nSlot+s]<n?" partial":""):"");
+      cell._free = n? free[d*nSlot+s] : 0;
+      cell._d=d; cell._s=s;
+    }
+  }
+}
+function buildHeatSkeleton(t){
+  t.innerHTML="";
+  const thead=el("thead"), htr=el("tr");
+  htr.append(el("th","corner"));
+  META.days.forEach(d=>htr.append(el("th",null,d.trim().slice(0,3))));
+  thead.append(htr); t.append(thead);
+  const tb=el("tbody"); t._cells=[];
+  for(let s=0;s<nSlot;s++){
+    const isHour = META.slots[s].t.endsWith(":00");
+    const tr=el("tr", isHour?"hour":null);
+    const tc=el("td","time"+(isHour?" hour":"")); tc.textContent = isHour? META.slots[s].label.replace(/:00/,"") : (META.slots[s].t.endsWith(":30")? "·":"");
+    tr.append(tc);
+    for(let d=0; d<nDay; d++){
+      const td=el("td"); const c=el("div","cell"); td.append(c); tr.append(td);
+      t._cells[d*nSlot+s]=c;
+      c.addEventListener("click",e=>showPop(e,c._d,c._s));
+    }
+    tb.append(tr);
+  }
+  t.append(tb);
+}
+
+/* popover: who's free / busy at a cell */
+function showPop(e, day, slot){
+  closePop();
+  const sel=selectedIdx();
+  const freeList=[], busyList=[];
+  for(const i of sel){ if(BUSY[i].g[day*nSlot+slot]) busyList.push(i); else freeList.push(i); }
+  const p=el("div","pop");
+  p.innerHTML = `<h4>${META.days[day].trim()} · ${META.slots[slot].label}</h4><div class="sub">${freeList.length} of ${sel.length} free</div>`;
+  if(freeList.length){ const g=el("div","grp free");
+    g.innerHTML=`<div class="lbl">Free <span class="n">${freeList.length}</span></div>`;
+    const ul=el("ul"); freeList.forEach(i=>{const li=el("li"); li.textContent=STUDENTS[i].name; ul.append(li);}); g.append(ul); p.append(g); }
+  if(busyList.length){ const g=el("div","grp busy");
+    g.innerHTML=`<div class="lbl">Busy <span class="n">${busyList.length}</span></div>`;
+    const ul=el("ul"); busyList.forEach(i=>{const li=el("li"); li.innerHTML=`${STUDENTS[i].name}<span>${labelAt(i,day,slot)||""}</span>`; ul.append(li);}); g.append(ul); p.append(g); }
+  document.body.append(p);
+  const r=p.getBoundingClientRect(); let x=e.clientX+12, y=e.clientY+12;
+  if(x+r.width>innerWidth-8) x=e.clientX-r.width-12;
+  if(y+r.height>innerHeight-8) y=innerHeight-r.height-8;
+  p.style.left=x+"px"; p.style.top=y+"px";
+  setTimeout(()=>document.addEventListener("mousedown",closePop,{once:true}),0);
+}
+function closePop(){ const p=document.querySelector(".pop"); if(p)p.remove(); }
+
+/* ============ SCHEDULES TAB ============ */
+function renderSchedPick(){
+  const sel=document.getElementById("schedPick"); sel.innerHTML="";
+  STUDENTS.forEach((s,i)=>{ const o=el("option",null,s.name); o.value=i; sel.append(o); });
+  sel.value=STATE.schedIdx;
+}
+function renderSched(){
+  const t=document.getElementById("schedTable");
+  if(!STUDENTS.length){ t.innerHTML='<tbody><tr><td style="padding:20px;color:var(--muted)">No schedules loaded yet. Use “Load schedules”.</td></tr></tbody>'; return; }
+  const i=STATE.schedIdx; t.innerHTML="";
+  const thead=el("thead"), htr=el("tr"); htr.append(el("th",null,""));
+  META.days.forEach(d=>htr.append(el("th",null,d.trim()))); thead.append(htr); t.append(thead);
+  const tb=el("tbody");
+  for(let s=0;s<nSlot;s++){
+    const isHour=META.slots[s].t.endsWith(":00");
+    const tr=el("tr", isHour?"hour":null);
+    const tc=el("td","time"+(isHour?" hour":"")); tc.textContent=isHour?META.slots[s].label.replace(/:00/,""):(META.slots[s].t.endsWith(":30")?"·":""); tr.append(tc);
+    for(let d=0; d<nDay; d++){
+      const busy=BUSY[i].g[d*nSlot+s]===1;
+      const td=el("td"); const c=el("div","scell "+(busy?"busy":"free"));
+      if(busy){ const lb=labelAt(i,d,s); const isStart = s===0 || BUSY[i].g[d*nSlot+s-1]!==1;
+        if(isStart){ c.classList.add("start"); c.textContent=lb||"Busy"; } }
+      c.addEventListener("click",()=>toggleCell(i,d,s));
+      td.append(c); tr.append(td);
+    }
+    tb.append(tr);
+  }
+  t.append(tb);
+}
+function toggleCell(i,d,s){
+  const g=BUSY[i].g, k=d*nSlot+s, now=g[k];
+  // update block list so labels persist sensibly
+  const st=STUDENTS[i];
+  if(now){ // remove this slot from any block (split if needed)
+    const nb=[];
+    for(const b of st.blocks){
+      if(b.day!==d || s<b.start || s>b.end){ nb.push(b); continue; }
+      if(b.start<s) nb.push({day:d,start:b.start,end:s-1,label:b.label});
+      if(b.end>s) nb.push({day:d,start:s+1,end:b.end,label:b.label});
+    }
+    st.blocks=nb;
+  } else {
+    st.blocks.push({day:d,start:s,end:s,label:"Busy"});
+  }
+  rebuildBusy(); renderSched(); renderRoster(); if(document.getElementById("pane-find").classList.contains("active")) renderFind();
+}
+
+/* ============ TABS ============ */
+function setTab(name){
+  document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected", t.dataset.tab===name));
+  document.getElementById("pane-find").classList.toggle("active", name==="find");
+  document.getElementById("pane-sched").classList.toggle("active", name==="sched");
+  if(name==="sched"){ renderSchedPick(); renderSched(); }
+  if(name==="find"){ renderFind(); }
+}
+
+/* ============ LOAD: flat Schedule format (paste or .xlsx) ============ */
+const DAYS_FIXED=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+function dayIndex(s){ s=String(s||"").trim().toLowerCase().slice(0,3);
+  return ({mon:0,tue:1,wed:2,thu:3,fri:4,sat:5})[s] ?? -1; }
+function parseTimeMin(v){
+  if(v==null||v==="") return null;
+  if(typeof v==="number"){ const frac=v-Math.floor(v); return Math.round(frac*1440); }
+  if(v instanceof Date){ return v.getHours()*60+v.getMinutes(); }
+  const m=String(v).match(/(\d{1,2}):(\d{2})\s*([AaPp][Mm])?/);
+  if(!m) return null;
+  let h=+m[1], mm=+m[2]; const ap=m[3]?m[3].toLowerCase():null;
+  if(ap){ h=h%12; if(ap==="pm") h+=12; }
+  return h*60+mm;
+}
+function splitCSVLine(line){
+  const out=[]; let cur="", q=false;
+  for(let i=0;i<line.length;i++){ const c=line[i];
+    if(q){ if(c==='"'){ if(line[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+    else { if(c===','){out.push(cur);cur="";} else if(c==='"'){q=true;} else cur+=c; } }
+  out.push(cur); return out;
+}
+// assemble internal slot-model from minute-based blocks
+function assembleData(label, students){
+  let lo=8*60, hi=21*60;
+  for(const s of students) for(const b of s.mblocks){ lo=Math.min(lo,b.startMin); hi=Math.max(hi,b.endMin); }
+  const axisStart=Math.floor(lo/15)*15, axisEnd=Math.max(axisStart+15, Math.ceil(hi/15)*15);
+  const slots=[];
+  for(let m=axisStart;m<axisEnd;m+=15) slots.push({t:`${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`, label:minToLabel(m), mins:15});
+  const nS=slots.length;
+  const outStudents=students.map(s=>({name:s.name, sheet:"", blocks:s.mblocks.map(b=>{
+    let s0=Math.round((b.startMin-axisStart)/15), s1=Math.round((b.endMin-axisStart)/15)-1;
+    s0=Math.max(0,Math.min(nS-1,s0)); s1=Math.max(s0,Math.min(nS-1,s1));
+    return {day:b.day, start:s0, end:s1, label:b.label};
+  })}));
+  return {meta:{label, days:DAYS_FIXED, slots}, students:outStudents};
+}
+function rowsToStudents(rows){ // rows: array of [person,day,start,end,type,note]
+  const byPerson=new Map(); let ok=0, skip=0;
+  for(const r of rows){
+    const person=String(r[0]??"").trim(); const di=dayIndex(r[1]);
+    const sm=parseTimeMin(r[2]), em=parseTimeMin(r[3]);
+    const type=String(r[4]??"").trim(), note=String(r[5]??"").trim();
+    if(!person||di<0||sm==null||em==null||em<=sm){ if(person||r[2]!=null&&r[2]!=="") skip++; continue; }
+    if(!byPerson.has(person)) byPerson.set(person,[]);
+    byPerson.get(person).push({day:di,startMin:sm,endMin:em,label:note||type||"Busy"});
+    ok++;
+  }
+  return {students:[...byPerson].map(([name,mblocks])=>({name,mblocks})), ok, skip};
+}
+function parsePastedRows(text){
+  const raw=String(text||"").replace(/\r\n?/g,"\n").split("\n").filter(l=>l.trim()!=="");
+  if(!raw.length) throw new Error("Nothing to load. Paste the Schedule rows first.");
+  const tab=raw.some(l=>l.includes("\t"));
+  let rows=raw.map(l=> tab ? l.split("\t") : splitCSVLine(l));
+  if(String(rows[0][0]||"").trim().toLowerCase()==="person") rows=rows.slice(1);
+  const {students,ok,skip}=rowsToStudents(rows);
+  if(!ok) throw new Error("No valid rows. Expected columns: Person, Day, Start, End, Type, Note.");
+  return {label:"Pasted schedule", students, ok, skip};
+}
+function parseScheduleWorkbook(ab){
+  if(typeof XLSX==="undefined") throw new Error("Spreadsheet reader didn’t load (needs internet for .xlsx). Paste the table instead.");
+  const wb=XLSX.read(ab,{type:"array"});
+  const nm=wb.SheetNames.find(n=>n.trim().toLowerCase()==="schedule");
+  if(!nm) throw new Error("No “Schedule” tab in this workbook.");
+  const arr=XLSX.utils.sheet_to_json(wb.Sheets[nm],{header:1,raw:true,blankrows:false});
+  if(!arr.length) throw new Error("The Schedule tab is empty.");
+  const hdr=arr[0].map(h=>String(h||"").trim().toLowerCase());
+  const ci={person:hdr.indexOf("person"),day:hdr.indexOf("day"),start:hdr.indexOf("start"),end:hdr.indexOf("end"),type:hdr.indexOf("type"),note:hdr.indexOf("note")};
+  if(ci.person<0||ci.day<0||ci.start<0||ci.end<0) throw new Error("Couldn’t find Person / Day / Start / End columns in the Schedule tab.");
+  const rows=arr.slice(1).map(r=>[r[ci.person],r[ci.day],r[ci.start],r[ci.end],ci.type>=0?r[ci.type]:"",ci.note>=0?r[ci.note]:""]);
+  const {students,ok,skip}=rowsToStudents(rows);
+  if(!ok) throw new Error("No schedule rows found in the Schedule tab.");
+  return {label:"SCSJ Schedules", students, ok, skip};
+}
+function emptyData(){ return assembleData("\u2014", []); }
+
+function loadData(data, sourceLabel){
+  buildModel(data);
+  STATE.selected.clear();
+  STATE.schedIdx = Math.max(0, STUDENTS.findIndex(s=>s.blocks.length>0));
+  STATE.filter="";
+  STATE.startSlot=0; STATE.endSlot=nSlot-1;
+  STATE.days=new Set(META.days.map((_,i)=>i).filter(i=>i<5)); // Mon–Fri default
+  document.getElementById("dsLabel").textContent = sourceLabel || META.label;
+  const sb=document.getElementById("rosterSearch"); if(sb) sb.value="";
+  heatBuilt=false;
+  renderRoster(); renderDayToggle(); fillTimeSelects(); renderRamp(); renderFind();
+}
+function loadFlat(parsed, label){
+  loadData(assembleData(parsed.label, parsed.students), label||parsed.label);
+  closeLoader();
+  toast(`Loaded ${parsed.ok} row${parsed.ok===1?"":"s"} · ${STUDENTS.length} ${STUDENTS.length===1?"person":"people"}`+(parsed.skip?` (${parsed.skip} skipped)`:""));
+}
+
+/* ============ LOADER MODAL ============ */
+function openLoader(){ document.getElementById("loader").hidden=false; setTimeout(()=>document.getElementById("pasteBox").focus(),30); }
+function closeLoader(){ document.getElementById("loader").hidden=true; }
+
+
+/* ============ WIRE UP ============ */
+function init(){
+  loadData(emptyData(), "\u2014");
+
+  document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>setTab(t.dataset.tab)));
+  document.getElementById("rosterSearch").addEventListener("input",e=>{STATE.filter=e.target.value; renderRoster();});
+  document.getElementById("selAll").addEventListener("click",()=>{
+    const q=STATE.filter.toLowerCase();
+    STUDENTS.forEach((s,i)=>{ if(s.blocks.length && (!q||s.name.toLowerCase().includes(q))) STATE.selected.add(i); });
+    renderRoster(); renderFind();
+  });
+  document.getElementById("selNone").addEventListener("click",()=>{STATE.selected.clear(); renderRoster(); renderFind();});
+  document.getElementById("minLen").addEventListener("change",e=>{STATE.minLen=+e.target.value; renderFind();});
+  document.querySelectorAll("#thresholdSeg button").forEach(b=>b.addEventListener("click",()=>{
+    document.querySelectorAll("#thresholdSeg button").forEach(x=>x.setAttribute("aria-pressed","false"));
+    b.setAttribute("aria-pressed","true"); STATE.slack=+b.dataset.slack; renderFind();
+  }));
+
+  document.getElementById("loadBtn").addEventListener("click",openLoader);
+  document.getElementById("loaderClose").addEventListener("click",closeLoader);
+  document.getElementById("loader").addEventListener("mousedown",e=>{ if(e.target.id==="loader") closeLoader(); });
+  document.getElementById("uploadBtn").addEventListener("click",()=>document.getElementById("fileInput").click());
+  document.getElementById("pasteLoad").addEventListener("click",()=>{
+    try{ loadFlat(parsePastedRows(document.getElementById("pasteBox").value)); document.getElementById("pasteBox").value=""; }
+    catch(err){ toast(err.message); }
+  });
+  document.getElementById("fileInput").addEventListener("change",e=>{
+    const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
+    rd.onload=()=>{ try{ loadFlat(parseScheduleWorkbook(rd.result), f.name.replace(/\.xlsx$/i,"")); }catch(err){ toast(err.message); } };
+    rd.readAsArrayBuffer(f); e.target.value="";
+  });
+
+  document.getElementById("schedPick").addEventListener("change",e=>{STATE.schedIdx=+e.target.value; renderSched();});
+  document.getElementById("addPerson").addEventListener("click",()=>{
+    const name=prompt("Name of the person to add:"); if(!name)return;
+    STUDENTS.push({name:name.trim(),sheet:"",blocks:[]}); rebuildBusy();
+    STATE.schedIdx=STUDENTS.length-1; renderSchedPick(); renderSched(); renderRoster(); toast("Added "+name.trim());
+  });
+  document.getElementById("renamePerson").addEventListener("click",()=>{
+    const cur=STUDENTS[STATE.schedIdx]; const name=prompt("Rename person:",cur.name); if(!name)return;
+    cur.name=name.trim(); renderSchedPick(); renderSched(); renderRoster();
+  });
+
+  document.getElementById("exportJson").addEventListener("click",()=>{
+    const out={meta:META, students:STUDENTS.map(s=>({name:s.name,sheet:s.sheet,blocks:s.blocks}))};
+    const blob=new Blob([JSON.stringify(out)],{type:"application/json"});
+    const a=el("a"); a.href=URL.createObjectURL(blob); a.download="overlap_schedules.json"; a.click(); URL.revokeObjectURL(a.href);
+  });
+  document.getElementById("importJson").addEventListener("click",()=>document.getElementById("jsonInput").click());
+  document.getElementById("jsonInput").addEventListener("change",e=>{
+    const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
+    rd.onload=()=>{ try{ const data=JSON.parse(rd.result); loadData(data, f.name.replace(/\.json$/i,"")); toast("Loaded saved schedules"); }catch(err){ toast("Couldn't read that file."); } };
+    rd.readAsText(f); e.target.value="";
+  });
+
+  window.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closePop(); closeLoader(); } });
+  window.addEventListener("scroll",closePop,true);
+
+  openLoader(); // start on the load screen (no pre-loaded data)
+}
+init();
+</script>
+</body>
+</html>

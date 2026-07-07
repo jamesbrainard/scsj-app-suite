@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR Code Generator</title>
+<script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+<style>
+:root{
+  --ink:#1b1d2a; --ink-soft:#4a4d63; --muted:#7c7f92;
+  --paper:#f6f5f1; --surface:#ffffff; --line:#e6e4dc; --line-strong:#d4d1c6;
+  --acc:#1f8a86; --acc-ink:#146663; --acc-bg:#e3f3f2;
+  --mono:ui-monospace,"SFMono-Regular","Cascadia Code","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --shadow:0 1px 2px rgba(27,29,42,.06),0 8px 24px rgba(27,29,42,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font-family:var(--sans); color:var(--ink); background:var(--paper); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased}
+.eyebrow{font:600 10.5px/1 var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+button{font-family:inherit}
+
+.app{max-width:560px; margin:0 auto; padding:20px}
+header.top{display:flex; align-items:baseline; gap:12px; margin-bottom:4px; flex-wrap:wrap}
+header.top h1{margin:0; font-size:22px; font-weight:700; letter-spacing:-.02em}
+header.top .sub{font:500 12px/1 var(--mono); color:var(--muted)}
+.lead{color:var(--ink-soft); margin:0 0 18px; max-width:60ch}
+
+.card{background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow)}
+.card .bd{padding:22px}
+
+.field{display:flex; flex-direction:column; gap:6px}
+.field label{font:600 10.5px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+.field input{border:1px solid var(--line-strong); border-radius:9px; padding:11px 12px; font-size:15px; background:var(--paper); color:var(--ink)}
+.field input:focus{outline:2px solid var(--acc); outline-offset:-1px; background:var(--surface)}
+
+.actions{display:flex; gap:10px; margin-top:14px}
+.btn{border:1px solid var(--line-strong); background:var(--surface); color:var(--ink); font-weight:600; font-size:13px; padding:10px 14px; border-radius:9px; cursor:pointer; display:inline-flex; align-items:center; gap:8px}
+.btn:hover{border-color:var(--ink-soft)}
+.btn.primary{background:var(--ink); color:#fff; border-color:var(--ink)}
+.btn.primary:hover{background:#000}
+.btn.wide{flex:1; justify-content:center}
+.btn svg{width:15px; height:15px}
+
+.result{margin-top:20px; padding-top:20px; border-top:1px solid var(--line); display:flex; flex-direction:column; align-items:center; gap:14px}
+.result.hidden{display:none}
+#qrcode{display:flex; justify-content:center; padding:14px; background:var(--surface); border:1px solid var(--line); border-radius:12px}
+#qrcode img{display:block; border-radius:4px}
+.hint{font-size:12px; color:var(--muted); margin:12px 0 0}
+
+footer{color:var(--muted); font-size:11.5px; margin-top:18px; text-align:center}
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>QR Code Generator</h1>
+    <span class="sub">text or link → scannable QR code</span>
+  </header>
+  <p class="lead">Paste a URL or any text and generate a QR code you can save or print.</p>
+
+  <section class="card">
+    <div class="bd">
+      <div class="field">
+        <label for="qrInput">Text or URL</label>
+        <input type="text" id="qrInput" placeholder="https://example.com" autocomplete="off">
+      </div>
+      <div class="actions">
+        <button class="btn primary wide" id="btnGenerate">Generate QR code</button>
+      </div>
+      <p class="hint">Press Enter or click Generate.</p>
+
+      <div class="result hidden" id="result">
+        <div id="qrcode"></div>
+        <button class="btn" id="btnDownload">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          Download PNG
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <footer>Runs entirely in your browser. Nothing is uploaded, and no data is stored.</footer>
+</div>
+
+<script>
+"use strict";
+const qrInput = document.getElementById("qrInput");
+const qrcodeContainer = document.getElementById("qrcode");
+const result = document.getElementById("result");
+const btnDownload = document.getElementById("btnDownload");
+let lastDataUrl = null;
+
+function generateQRCode(){
+  const value = qrInput.value.trim();
+  if(!value){
+    qrInput.focus();
+    return;
+  }
+
+  qrcodeContainer.innerHTML = "";
+  try{
+    const qr = new QRious({ value, size: 260 });
+    lastDataUrl = qr.toDataURL();
+
+    const img = document.createElement("img");
+    img.src = lastDataUrl;
+    img.alt = `QR code for: ${value}`;
+    qrcodeContainer.appendChild(img);
+
+    result.classList.remove("hidden");
+  }catch(err){
+    console.error("Error generating QR code:", err);
+    alert("Error generating QR code. Please check the console for details.");
+  }
+}
+
+document.getElementById("btnGenerate").addEventListener("click", generateQRCode);
+qrInput.addEventListener("keydown", (e) => {
+  if(e.key === "Enter") generateQRCode();
+});
+
+btnDownload.addEventListener("click", () => {
+  if(!lastDataUrl) return;
+  const a = document.createElement("a");
+  a.href = lastDataUrl;
+  a.download = "qr-code.png";
+  a.click();
+});
+</script>
+</body>
+</html>

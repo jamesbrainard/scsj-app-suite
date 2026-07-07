@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mail Merge</title>
+<style>
+:root{
+  --ink:#1b1d2a; --ink-soft:#4a4d63; --muted:#7c7f92;
+  --paper:#f6f5f1; --surface:#ffffff; --line:#e6e4dc; --line-strong:#d4d1c6;
+  --go:#178a63; --go-ink:#0e5c41;
+  --blue:#2f6fb0; --blue-bg:#e5eef8;
+  --rose:#c0605f; --rose-ink:#a23b39;
+  --focus:#3b4bd8;
+  --mono:ui-monospace,"SFMono-Regular","Cascadia Code","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --shadow:0 1px 2px rgba(27,29,42,.05),0 8px 24px rgba(27,29,42,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:var(--sans); color:var(--ink); background:var(--paper); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased}
+.eyebrow{font:600 10.5px/1 var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+.eyebrow .n{color:var(--go-ink)}
+button{font-family:inherit}
+
+.app{max-width:1120px; margin:0 auto; padding:20px 22px 40px}
+header.top{display:flex; align-items:center; gap:14px; margin-bottom:6px}
+header.top h1{margin:0; font-size:22px; font-weight:700; letter-spacing:-.02em}
+header.top .sub{font:500 12px/1 var(--mono); color:var(--muted)}
+header.top .spacer{flex:1}
+.lead{color:var(--ink-soft); margin:0 0 20px; max-width:76ch}
+
+.btn{border:1px solid var(--line-strong); background:var(--surface); color:var(--ink); font-weight:600; font-size:13px; padding:8px 13px; border-radius:9px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; white-space:nowrap}
+.btn:hover{border-color:var(--ink-soft)}
+.btn.primary{background:var(--ink); color:#fff; border-color:var(--ink)}
+.btn.primary:hover{background:#000}
+.btn.ghost{border-color:transparent; background:transparent; color:var(--ink-soft)}
+.btn.ghost:hover{background:var(--surface); border-color:var(--line)}
+.btn:disabled{opacity:.45; cursor:not-allowed}
+.btn.small{padding:6px 10px; font-size:12px}
+.btn svg{width:15px;height:15px}
+
+.card{background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); margin-bottom:18px}
+.card .hd{padding:15px 17px 0}
+.card .bd{padding:14px 17px 17px}
+.card h2{margin:6px 0 0; font-size:15.5px; font-weight:700; letter-spacing:-.01em}
+.card .desc{font-size:12.5px; color:var(--muted); margin:3px 0 0}
+
+/* data card */
+.drop{border:1.6px dashed var(--line-strong); border-radius:12px; padding:22px; text-align:center; cursor:pointer; transition:.15s; background:var(--paper)}
+.drop:hover,.drop.over{border-color:var(--go); background:#eef7f2}
+.drop .big{font-weight:600; color:var(--ink-soft)}
+.drop .small{font-size:12.5px; color:var(--muted); margin-top:4px}
+.dataloaded{display:none}
+.dataloaded.show{display:block}
+.filerow{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px}
+.filetag{font:600 12px/1 var(--mono); background:var(--blue-bg); color:#245488; border:1px solid #cfe0f2; padding:6px 10px; border-radius:8px; display:inline-flex; gap:7px; align-items:center}
+.hdrctl{display:flex; align-items:center; gap:9px; margin:2px 0 12px; flex-wrap:wrap}
+.hdrctl label{font:600 10.5px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+.stepper{display:inline-flex; align-items:center; border:1px solid var(--line-strong); border-radius:8px; overflow:hidden}
+.stepper button{border:0; background:var(--surface); width:28px; height:30px; font-size:16px; cursor:pointer; color:var(--ink-soft)}
+.stepper button:hover{background:var(--paper)}
+.stepper input{width:42px; border:0; border-left:1px solid var(--line); border-right:1px solid var(--line); text-align:center; height:30px; font:600 13px/1 var(--mono)}
+.hdrhint{font-size:12px; color:var(--muted)}
+.rawwrap{overflow:auto; border:1px solid var(--line); border-radius:10px; max-height:200px}
+table.raw{border-collapse:collapse; font-size:12px; width:100%}
+table.raw td{border:1px solid var(--line); padding:4px 8px; white-space:nowrap; color:var(--ink-soft)}
+table.raw td.rownum{position:sticky; left:0; background:var(--paper); color:var(--muted); font:600 10.5px/1 var(--mono); text-align:right}
+table.raw tr.ishdr td{background:#eef7f2; color:var(--go-ink); font-weight:700}
+table.raw tr.skip td{opacity:.5}
+.summary{margin-top:11px; font:600 12px/1 var(--mono); color:var(--go-ink)}
+
+/* document toolbar */
+.doctoolbar{display:flex; flex-wrap:wrap; gap:10px 14px; align-items:flex-end; margin-bottom:14px}
+.seg{display:flex; border:1px solid var(--line-strong); border-radius:9px; overflow:hidden}
+.seg button{border:0; background:var(--surface); padding:8px 14px; font-size:13px; font-weight:600; color:var(--ink-soft); cursor:pointer; border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink); color:#fff}
+.doctoolbar .spacer{flex:1}
+.f{display:flex; flex-direction:column; gap:5px}
+.f label{font:600 10px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+.f input[type=text],.f select{border:1px solid var(--line-strong); border-radius:8px; padding:7px 9px; font-size:13px; font-weight:600; background:var(--surface); color:var(--ink)}
+.f input[type=text]{font-weight:500}
+
+/* fields */
+.fields{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px}
+.chip{border:1px solid var(--line-strong); background:var(--paper); color:var(--ink-soft); border-radius:999px; padding:5px 11px; font-size:12.5px; font-weight:600; cursor:pointer; transition:.12s}
+.chip:hover{border-color:var(--go); color:var(--go-ink); background:#eef7f2}
+.chip::before{content:"{ }"; font:600 10px/1 var(--mono); color:var(--muted); margin-right:6px}
+.chip:hover::before{color:var(--go)}
+.fields .empty{font-size:12.5px; color:var(--muted); font-style:italic}
+.renamebar{margin:-4px 0 12px}
+.renamepanel{border:1px solid var(--line); border-radius:11px; padding:12px 13px; margin-bottom:14px; background:var(--paper)}
+.renamepanel[hidden]{display:none}
+.rndesc{margin:0 0 10px; font-size:12.5px; color:var(--muted)}
+.rnlist{display:flex; flex-direction:column; gap:7px; max-height:240px; overflow:auto}
+.rnrow{display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:9px; align-items:center}
+.rnorig{font:600 12px/1.3 var(--mono); color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.rnrow .arrow{color:var(--muted)}
+.rninput{border:1px solid var(--line-strong); border-radius:7px; padding:6px 8px; font-size:13px; background:var(--surface); color:var(--ink); min-width:0}
+.rninput:focus{outline:2px solid var(--focus); outline-offset:-1px}
+.rnlist .empty{font-size:12.5px; color:var(--muted); font-style:italic}
+.fmtbar{display:flex; flex-wrap:wrap; gap:10px 14px; align-items:flex-end; margin-bottom:14px; padding:11px 12px; border:1px solid var(--line); border-radius:11px; background:var(--paper)}
+.fmtbtns{display:flex; gap:5px}
+.fmtbtn{width:32px; height:32px; border:1px solid var(--line-strong); background:var(--surface); border-radius:8px; cursor:pointer; font-size:14px; color:var(--ink); display:grid; place-items:center}
+.fmtbtn:hover{border-color:var(--ink-soft)}
+.fmtbtn[aria-pressed="true"]{background:var(--ink); color:#fff; border-color:var(--ink)}
+.fmthint{font-size:12px; color:var(--muted); align-self:center; flex:1 1 180px; min-width:160px}
+
+/* record nav */
+.nav{display:flex; align-items:center; gap:9px; margin-bottom:12px; flex-wrap:wrap}
+.nav button.step{border:1px solid var(--line-strong); background:var(--surface); width:32px; height:32px; border-radius:8px; cursor:pointer; font-size:15px; color:var(--ink-soft)}
+.nav button.step:hover:not(:disabled){border-color:var(--ink-soft)}
+.nav button.step:disabled{opacity:.4; cursor:not-allowed}
+.nav .pos{font:600 12.5px/1 var(--mono); color:var(--ink-soft)}
+.nav .pos input{width:46px; border:1px solid var(--line-strong); border-radius:6px; text-align:center; padding:4px; font:inherit}
+.nav .pos input.bad{border-color:var(--rose); color:var(--rose-ink)}
+.fitbadge{font:600 11px/1 var(--mono); padding:5px 10px; border-radius:999px; letter-spacing:.02em}
+.fitbadge.ok{background:#e7f3ed; color:var(--go-ink); border:1px solid #cfe8dd}
+.fitbadge.over{background:#fbecea; color:var(--rose-ink); border:1px solid #f0cfcc}
+.nav .spacer{flex:1}
+
+.warn{margin:0 0 12px; font-size:12.5px; color:#9a4b2e; background:#f8ede6; border:1px solid #efd6c7; border-radius:9px; padding:9px 11px; display:none}
+.warn.show{display:block}
+.warn code{font-family:var(--mono); background:#fff; border:1px solid #eaddd2; padding:1px 5px; border-radius:4px}
+
+/* page stage (true scale) */
+.stage{background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:22px; overflow:auto; max-height:660px}
+.stageInner{margin:0 auto; position:relative}
+.page{position:relative; background:#fff; box-shadow:0 3px 18px rgba(27,29,42,.14); transform-origin:top left}
+.pagePad{position:relative}
+#tpl{display:block; width:100%; min-height:120px; border:0; outline:0; padding:0; margin:0; background:transparent; color:inherit; font-family:inherit; font-size:inherit; line-height:inherit; white-space:pre-wrap; word-wrap:break-word; position:relative; z-index:1}
+#tpl:empty:before{ content:attr(data-ph); color:var(--muted); white-space:pre-wrap; pointer-events:none }
+#tpl:focus{outline:0}
+#pageContent{white-space:pre-wrap; word-wrap:break-word; position:relative; z-index:1}
+#pageContent .ph{background:#fdeede; color:#9a4b2e; border-radius:3px; padding:0 2px}
+.brkline{position:absolute; left:0; right:0; border-top:1.6px dashed var(--rose); z-index:3; pointer-events:none}
+.brkline span{position:absolute; right:2px; top:-8px; font:600 9px/1 var(--mono); color:var(--rose-ink); background:#fff; padding:1px 5px; border:1px solid #f0cfcc; border-radius:4px}
+#measurer{position:absolute; left:-99999px; top:0; visibility:hidden; white-space:pre-wrap; word-wrap:break-word; padding:0; border:0; z-index:-1}
+
+.docfoot{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:15px}
+.docfoot .scan{font:600 12px/1 var(--mono)}
+.docfoot .scan.ok{color:var(--go-ink)} .docfoot .scan.bad{color:var(--rose-ink)}
+.docfoot .spacer{flex:1}
+.docfoot .hint{font-size:12px; color:var(--muted); flex-basis:100%}
+
+footer{color:var(--muted); font-size:11.5px; margin-top:26px; text-align:center}
+input[type=file]{display:none}
+
+.toast{position:fixed; bottom:18px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:10px 16px; border-radius:10px; font-size:13px; font-weight:600; opacity:0; pointer-events:none; transition:.25s; z-index:80; box-shadow:var(--shadow)}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+
+/* print / save-as-pdf */
+#printRoot{display:none}
+@media print{
+  .app{display:none !important}
+  #printRoot{display:block !important}
+  #printRoot .sheet{ white-space:pre-wrap; word-wrap:break-word; color:#000; break-after:page; }
+  #printRoot .sheet:last-child{ break-after:auto; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Mail Merge</h1>
+    <span class="sub">spreadsheet &rarr; one page per record</span>
+    <span class="spacer"></span>
+    <button class="btn ghost" id="loadRecipe" title="Load a saved template + settings">Load recipe</button>
+    <button class="btn ghost" id="saveRecipe" title="Save this template + settings for reuse">Save recipe</button>
+    <input type="file" id="recipeInput" accept=".json">
+  </header>
+  <p class="lead">Merge each row of a spreadsheet onto its own printed page. Write one template with fields in <b>{curly brackets}</b>, then edit and preview at true page size so you can see exactly where the page ends and catch any record that runs long. Nothing leaves your browser.</p>
+
+  <!-- 1 · DATA -->
+  <section class="card">
+    <div class="hd"><span class="eyebrow"><span class="n">1</span> &nbsp;Data source</span><h2>Your spreadsheet</h2><p class="desc">Upload a .csv, then tell it which row your column headers are in.</p></div>
+    <div class="bd">
+      <div class="drop" id="drop">
+        <div class="big">Drop a .csv here, or click to choose</div>
+        <div class="small">Exported from anything with a header row</div>
+      </div>
+      <input type="file" id="csvInput" accept=".csv,.tsv,.txt">
+      <div class="dataloaded" id="dataLoaded">
+        <div class="filerow">
+          <span class="filetag"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5h5"/><path d="M6 3h8l5 5v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/></svg><span id="fileName">file.csv</span></span>
+          <button class="btn ghost" id="changeFile">Choose a different file</button>
+        </div>
+        <div class="hdrctl">
+          <label for="hdrRow">Header row</label>
+          <div class="stepper"><button id="hdrDown">&minus;</button><input id="hdrRow" type="number" min="1" value="1"><button id="hdrUp">+</button></div>
+          <span class="hdrhint" id="hdrHint">Rows above are ignored; this row names your fields.</span>
+        </div>
+        <div class="rawwrap"><table class="raw" id="rawTable"></table></div>
+        <div class="summary" id="summary"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · DOCUMENT -->
+  <section class="card">
+    <div class="hd"><span class="eyebrow"><span class="n">2</span> &nbsp;Document</span><h2>Design the page</h2><p class="desc">Edit at true page size, then preview each record. The dashed line marks where one page ends.</p></div>
+    <div class="bd">
+      <div class="doctoolbar">
+        <div class="seg" id="modeSeg" role="group">
+          <button data-mode="edit" aria-pressed="true">Edit template</button>
+          <button data-mode="preview" aria-pressed="false">Preview records</button>
+        </div>
+        <span class="spacer"></span>
+        <div class="f"><label for="pageSize">Page</label><select id="pageSize"><option value="Letter" selected>Letter</option><option value="A4">A4</option></select></div>
+        <div class="f"><label for="margin">Margins</label><select id="margin"><option value="1in" selected>Normal (1&Prime;)</option><option value="0.5in">Narrow (½&Prime;)</option><option value="1.25in">Wide (1¼&Prime;)</option></select></div>
+        <div class="f"><label for="zoom">Zoom</label><select id="zoom"><option value="1" selected>100%</option><option value="fit">Fit</option><option value="0.75">75%</option><option value="0.5">50%</option></select></div>
+      </div>
+
+      <!-- Fields -->
+      <div class="fields" id="fields"><span class="empty">Load a CSV to see your fields.</span></div>
+      <div class="renamebar"><button class="btn ghost small" id="renameToggle">Rename fields &#9656;</button></div>
+      <div class="renamepanel" id="renamePanel" hidden>
+        <p class="rndesc">Give long column names (e.g. from Qualtrics) shorter labels to use in your template. Your CSV isn&rsquo;t changed, template fields update automatically, and renames save with the recipe.</p>
+        <div class="rnlist" id="rnList"></div>
+      </div>
+
+      <!-- Font settings (per-selection) -->
+      <div class="fmtbar" id="fmtbar">
+        <div class="f"><label for="font">Font</label><select id="font">
+          <option value='system-ui,-apple-system,"Segoe UI",Roboto,sans-serif' selected>Sans-serif</option>
+          <option value='Georgia,"Times New Roman",serif'>Serif</option>
+          <option value='Arial,Helvetica,sans-serif'>Arial</option>
+          <option value='"Times New Roman",Times,serif'>Times New Roman</option>
+          <option value='Georgia,serif'>Georgia</option>
+          <option value='Verdana,Geneva,sans-serif'>Verdana</option>
+          <option value='"Courier New",monospace'>Courier New</option>
+        </select></div>
+        <div class="f"><label for="size">Size</label><select id="size"><option>9</option><option>10</option><option>11</option><option selected>12</option><option>13</option><option>14</option><option>16</option><option>18</option><option>20</option><option>24</option></select></div>
+        <div class="f"><label>Style</label><div class="fmtbtns">
+          <button class="fmtbtn" data-cmd="bold" title="Bold" aria-pressed="false"><b>B</b></button>
+          <button class="fmtbtn" data-cmd="italic" title="Italic" aria-pressed="false"><i>I</i></button>
+          <button class="fmtbtn" data-cmd="underline" title="Underline" aria-pressed="false"><span style="text-decoration:underline">U</span></button>
+        </div></div>
+        <span class="fmthint">Select text to format part of a page; with nothing selected, this sets the default.</span>
+      </div>
+
+      <div class="nav" id="nav" style="display:none">
+        <button class="step" id="prev" title="Previous record">&lsaquo;</button>
+        <span class="pos">record <input id="pos" type="number" min="1" value="1"> of <span id="total">0</span></span>
+        <button class="step" id="next" title="Next record">&rsaquo;</button>
+        <span class="fitbadge ok" id="fitBadge">&mdash;</span>
+        <span class="spacer"></span>
+        <button class="btn ghost small" id="nextBad" style="display:none">Next over-length &rsaquo;</button>
+      </div>
+
+      <div class="warn" id="warn"></div>
+
+      <!-- Text editor / page -->
+      <div class="stage" id="stage">
+        <div class="stageInner" id="stageInner">
+          <div class="page" id="page">
+            <div class="pagePad" id="pagePad">
+              <div id="tpl" contenteditable="true" spellcheck="true" data-ph="Applicant: {First Name} {Last Name}&#10;Program: {Program}&#10;&#10;Reviewer notes:"></div>
+              <div id="pageContent" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="measurer"></div>
+
+      <div class="docfoot">
+        <div class="f"><label for="docName">Document name</label><input type="text" id="docName" value="Merge" size="16"></div>
+        <span class="scan" id="scan"></span>
+        <span class="spacer"></span>
+        <button class="btn primary" id="savePdf" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+          Save as PDF
+        </button>
+        <span class="hint" id="pdfHint">Opens your print dialog. Choose &ldquo;Save as PDF.&rdquo; Each record starts a new page; a record that runs past the dashed line will print on more than one page.</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>Runs entirely in your browser. Nothing is uploaded, and no data is stored.</footer>
+</div>
+
+<div id="printRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const el = (t,c,txt)=>{const e=document.createElement(t); if(c)e.className=c; if(txt!=null)e.textContent=txt; return e;};
+function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2000); }
+
+const S = { fileName:"", rawRows:[], headerRow:1, origColumns:[], rename:{}, columns:[], records:[], pos:0, mode:"edit", overflow:new Set() };
+const PAGES = { Letter:{w:816,h:1056}, A4:{w:794,h:1123} };  // px at 96/in
+const PXIN = 96;
+
+/* ── CSV ── */
+function detectDelim(text){
+  const line=(text.split(/\r?\n/).find(l=>l.trim()!=="")||""); const counts={",":0,";":0,"\t":0}; let q=false;
+  for(const ch of line){ if(ch==='"') q=!q; else if(!q && ch in counts) counts[ch]++; }
+  let best=",", n=-1; for(const d in counts){ if(counts[d]>n){n=counts[d]; best=d;} } return best;
+}
+function parseCSV(text, delim){
+  text=text.replace(/\r\n/g,"\n").replace(/\r/g,"\n"); const rows=[]; let row=[],field="",q=false,i=0;
+  while(i<text.length){ const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){field+='"';i+=2;continue;} q=false;i++;continue;} field+=c;i++;continue; }
+    if(c==='"'){q=true;i++;continue;} if(c===delim){row.push(field);field="";i++;continue;}
+    if(c==='\n'){row.push(field);rows.push(row);row=[];field="";i++;continue;} field+=c;i++;
+  }
+  row.push(field); rows.push(row);
+  if(rows.length && rows[rows.length-1].length===1 && rows[rows.length-1][0]==="") rows.pop();
+  return rows;
+}
+const rowEmpty = r => r.every(c=>String(c).trim()==="");
+
+function loadCSV(text, name){
+  S.rawRows=parseCSV(text, detectDelim(text)); S.fileName=name; S.headerRow=1;
+  const firstReal=S.rawRows.findIndex(r=>!rowEmpty(r)); if(firstReal>0) S.headerRow=firstReal+1;
+  $("fileName").textContent=name; $("dataLoaded").classList.add("show"); $("drop").style.display="none";
+  $("hdrRow").max=Math.max(1,S.rawRows.length); $("hdrRow").value=S.headerRow;
+  rebuildFromHeader(); renderRaw();
+}
+function computeColumns(){
+  const seen={};
+  return S.origColumns.map(o=>{
+    let name=(S.rename[o]&&S.rename[o].trim())||o;
+    if(seen[name]!=null){ seen[name]++; name=`${name} (${seen[name]})`; } else seen[name]=1;
+    return name;
+  });
+}
+function rebuildRecords(){
+  const hr=S.headerRow-1; S.records=[];
+  for(let r=hr+1;r<S.rawRows.length;r++){ const raw=S.rawRows[r]; if(rowEmpty(raw))continue; const rec={}; S.columns.forEach((c,i)=>rec[c]=(raw[i]!=null?String(raw[i]):"")); S.records.push(rec); }
+}
+function rebuildFromHeader(){
+  const hr=S.headerRow-1, header=S.rawRows[hr]||[]; const seen={};
+  S.origColumns=header.map((h,idx)=>{ let name=String(h).trim()||`Column ${idx+1}`; if(seen[name]!=null){seen[name]++;name=`${name} (${seen[name]})`;}else seen[name]=1; return name; });
+  S.columns=computeColumns(); rebuildRecords();
+  S.pos=0; renderFields(); renderRename(); renderSummary(); renderNav(); refreshWarn(); scanAll(); render();
+  $("savePdf").disabled=!(S.records.length && tplText().trim());
+}
+const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+function replaceTokenInEditor(oldN,newN){
+  const re=new RegExp("\\{\\s*"+escRe(oldN)+"\\s*\\}","g");
+  const walker=document.createTreeWalker($("tpl"),NodeFilter.SHOW_TEXT,null); const nodes=[]; let n;
+  while(n=walker.nextNode()) nodes.push(n); let changed=false;
+  nodes.forEach(tn=>{ re.lastIndex=0; if(re.test(tn.nodeValue)){ re.lastIndex=0; tn.nodeValue=tn.nodeValue.replace(re,`{${newN}}`); changed=true; } });
+  return changed;
+}
+function applyRename(){
+  const old=S.columns.slice(); S.columns=computeColumns();
+  old.forEach((o,i)=>{ const nn=S.columns[i]; if(o!==nn) replaceTokenInEditor(o,nn); });
+  rebuildRecords(); renderFields(); refreshWarn(); scanAll(); render();
+}
+function renderRaw(){
+  const t=$("rawTable"); t.innerHTML=""; const maxCols=Math.max(0,...S.rawRows.map(r=>r.length)); const show=Math.min(S.rawRows.length,8); const tb=el("tbody");
+  for(let r=0;r<show;r++){ const tr=el("tr"); const isH=(r===S.headerRow-1); if(isH)tr.className="ishdr"; else if(r<S.headerRow-1)tr.className="skip";
+    tr.append(el("td","rownum",String(r+1)));
+    for(let c=0;c<maxCols;c++) tr.append(el("td",null,(S.rawRows[r]&&S.rawRows[r][c]!=null)?String(S.rawRows[r][c]):"")); tb.append(tr); }
+  t.append(tb);
+  $("hdrHint").textContent = S.rawRows.length>show ? `Showing first ${show} of ${S.rawRows.length} rows · rows above the header are ignored.` : "Rows above are ignored; this row names your fields.";
+}
+function renderSummary(){ $("summary").textContent=`${S.records.length} record${S.records.length===1?"":"s"} · ${S.columns.length} field${S.columns.length===1?"":"s"}`; }
+
+/* ── fields ── */
+function renderFields(){
+  const host=$("fields"); host.innerHTML="";
+  if(!S.columns.length){ host.append(el("span","empty","Load a CSV to see your fields.")); return; }
+  S.columns.forEach(c=>{ const chip=el("button","chip",c); chip.addEventListener("mousedown",e=>e.preventDefault()); chip.addEventListener("click",()=>insertField(c)); host.append(chip); });
+}
+function insertField(name){
+  if(S.mode!=="edit") setMode("edit");
+  const tok=`{${name}}`; $("tpl").focus();
+  if(savedRange){ const sel=document.getSelection(); sel.removeAllRanges(); sel.addRange(savedRange); }
+  const sel=document.getSelection();
+  if(sel && sel.rangeCount && $("tpl").contains(sel.anchorNode)){
+    const r=sel.getRangeAt(0); r.deleteContents(); const node=document.createTextNode(tok); r.insertNode(node);
+    r.setStartAfter(node); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); savedRange=r.cloneRange();
+  } else { $("tpl").appendChild(document.createTextNode(tok)); }
+  onTemplateChange();
+}
+
+/* ── rename fields ── */
+let renamePanelOpen=false;
+function updateRenameCount(){
+  const n=(S.origColumns||[]).filter(o=>S.rename[o]&&S.rename[o].trim()&&S.rename[o]!==o).length;
+  $("renameToggle").textContent=`Rename fields ${n?`(${n}) `:""}${renamePanelOpen?"▾":"▸"}`;
+}
+function renderRename(){
+  const list=$("rnList"); list.innerHTML="";
+  if(!S.origColumns.length){ list.innerHTML='<span class="empty">Load a CSV to rename fields.</span>'; updateRenameCount(); return; }
+  S.origColumns.forEach(o=>{
+    const row=el("div","rnrow");
+    const orig=el("span","rnorig",o); orig.title=o;
+    const inp=el("input","rninput"); inp.placeholder=o; inp.value=S.rename[o]||"";
+    inp.addEventListener("change",()=>{ const v=inp.value.trim(); if(v && v!==o) S.rename[o]=v; else delete S.rename[o]; applyRename(); updateRenameCount(); });
+    row.append(orig, el("span","arrow","→"), inp); list.append(row);
+  });
+  updateRenameCount();
+}
+
+/* ── template + selection helpers ── */
+let baseFont='system-ui,-apple-system,"Segoe UI",Roboto,sans-serif', baseSize=12;
+let savedRange=null;
+const getTemplate = ()=>$("tpl").innerHTML;
+const setTemplate = html=>{ $("tpl").innerHTML=html; };
+const tplText = ()=>$("tpl").textContent||"";
+
+/* ── merge ── */
+const FIELD_RE=/\{\s*([^{}\r\n]+?)\s*\}/g;
+function usedFields(tpl){ const out=[]; let m; FIELD_RE.lastIndex=0; while((m=FIELD_RE.exec(tpl))) out.push(m[1].trim()); return out; }
+function unknownFields(tpl){ const cols=new Set(S.columns); return [...new Set(usedFields(tpl))].filter(f=>!cols.has(f)); }
+/* replace {field} tokens inside a container's text nodes, preserving formatting */
+function mergeInto(container, html, rec, highlight){
+  container.innerHTML=html;
+  const cols=new Set(S.columns);
+  const walker=document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  const nodes=[]; let n; while(n=walker.nextNode()) nodes.push(n);
+  for(const tn of nodes){
+    const text=tn.nodeValue; if(!text || text.indexOf("{")<0) continue;
+    FIELD_RE.lastIndex=0; if(!FIELD_RE.test(text)) continue;
+    const frag=document.createDocumentFragment(); let last=0,m; FIELD_RE.lastIndex=0;
+    while((m=FIELD_RE.exec(text))){
+      if(m.index>last) frag.append(document.createTextNode(text.slice(last,m.index)));
+      const key=m[1].trim();
+      if(cols.has(key)) frag.append(document.createTextNode(rec?rec[key]:m[0]));
+      else if(highlight){ const s=document.createElement("span"); s.className="ph"; s.textContent=m[0]; frag.append(s); }
+      else frag.append(document.createTextNode(m[0]));
+      last=m.index+m[0].length;
+    }
+    if(last<text.length) frag.append(document.createTextNode(text.slice(last)));
+    tn.parentNode.replaceChild(frag, tn);
+  }
+}
+function refreshWarn(){
+  const w=$("warn"); if(!S.columns.length){ w.classList.remove("show"); return; }
+  const unk=unknownFields(tplText());
+  if(unk.length){ w.classList.add("show"); w.innerHTML=`These fields aren&rsquo;t columns in your CSV. Check spelling and capitalization: `+unk.map(u=>`<code>{${u}}</code>`).join(" "); }
+  else w.classList.remove("show");
+}
+
+/* ── page metrics ── */
+function metrics(){
+  const pg=PAGES[$("pageSize").value]||PAGES.Letter;
+  const m=parseFloat($("margin").value)*PXIN;
+  const fpx=baseSize*96/72, lh=1.6;
+  return { pw:pg.w, ph:pg.h, m, cw:pg.w-2*m, ch:pg.h-2*m, fpx, lh };
+}
+function fontStack(){ return baseFont; }
+function zoomVal(){ const z=$("zoom").value; if(z==="fit"){ const avail=$("stage").clientWidth-44; return Math.max(.2, Math.min(1, avail/metrics().pw)); } return parseFloat(z); }
+
+/* measure the rendered height (px) of a merged record at content width, honoring inline formatting */
+function measureRecord(rec){
+  const M=metrics(), meas=$("measurer");
+  meas.style.width=M.cw+"px"; meas.style.fontFamily=baseFont; meas.style.fontSize=M.fpx+"px"; meas.style.lineHeight=M.lh; meas.style.whiteSpace="pre-wrap"; meas.style.wordWrap="break-word";
+  mergeInto(meas, getTemplate(), rec, false);
+  return meas.offsetHeight;
+}
+
+/* ── mode ── */
+function setMode(mode){
+  S.mode=mode;
+  document.querySelectorAll("#modeSeg button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.mode===mode));
+  const edit=mode==="edit";
+  $("tpl").style.display = edit?"block":"none";
+  $("pageContent").style.display = edit?"none":"block";
+  $("fields").style.display = edit?"flex":"none";
+  $("nav").style.display = edit?"none":"flex";
+  render();
+}
+
+/* ── render page (edit or preview) ── */
+function render(){
+  const M=metrics();
+  const page=$("page"), pad=$("pagePad");
+  page.style.width=M.pw+"px";
+  page.style.fontFamily=fontStack(); page.style.fontSize=M.fpx+"px"; page.style.lineHeight=M.lh;
+  pad.style.padding=M.m+"px";
+
+  let contentH;
+  if(S.mode==="edit"){
+    const ta=$("tpl"); ta.style.minHeight=M.ch+"px";
+    contentH=ta.scrollHeight;
+  } else {
+    const rec=S.records.length? S.records[Math.min(S.pos,S.records.length-1)] : null;
+    mergeInto($("pageContent"), getTemplate(), rec, true);
+    contentH=$("pageContent").offsetHeight;
+  }
+
+  // page height grows to hold all content (+ bottom margin), min one page
+  const totalH=Math.max(M.ph, M.m*2+contentH);
+  page.style.height=totalH+"px";
+
+  // page-break lines at each page boundary within the content
+  page.querySelectorAll(".brkline").forEach(n=>n.remove());
+  const pages=Math.max(1, Math.ceil((contentH-0.5)/M.ch));
+  for(let k=1;k<pages;k++){
+    const y=M.m + k*M.ch;
+    const line=el("div","brkline"); line.style.top=y+"px";
+    line.append(el("span",null,`page ${k+1}`));
+    page.append(line);
+  }
+
+  // fit badge (preview)
+  if(S.mode==="preview" && S.records.length){
+    const badge=$("fitBadge");
+    if(pages<=1){ badge.className="fitbadge ok"; badge.textContent="Fits on one page"; }
+    else { badge.className="fitbadge over"; badge.textContent=`Runs onto ${pages} pages`; }
+  }
+
+  // zoom / reserve scaled space
+  const z=zoomVal();
+  page.style.transform=`scale(${z})`;
+  const inner=$("stageInner"); inner.style.width=(M.pw*z)+"px"; inner.style.height=(totalH*z)+"px";
+}
+
+/* ── nav + overflow scan ── */
+function renderNav(){
+  $("total").textContent=S.records.length;
+  $("pos").max=Math.max(1,S.records.length);
+  $("pos").value=S.records.length? S.pos+1 : 0;
+  $("prev").disabled=S.pos<=0; $("next").disabled=S.pos>=S.records.length-1;
+  $("pos").classList.toggle("bad", S.overflow.has(S.pos));
+}
+function go(n){ if(!S.records.length)return; S.pos=Math.max(0,Math.min(S.records.length-1,n)); renderNav(); render(); }
+
+let scanTimer=null;
+function scanAll(){
+  clearTimeout(scanTimer);
+  scanTimer=setTimeout(()=>{
+    const M=metrics(); S.overflow=new Set();
+    if(S.records.length && tplText().trim()){
+      S.records.forEach((rec,i)=>{ if(measureRecord(rec)>M.ch+0.5) S.overflow.add(i); });
+    }
+    const scan=$("scan"), nb=$("nextBad");
+    if(!S.records.length){ scan.textContent=""; scan.className="scan"; nb.style.display="none"; }
+    else if(S.overflow.size===0){ scan.textContent=`All ${S.records.length} fit on one page`; scan.className="scan ok"; nb.style.display="none"; }
+    else { scan.textContent=`${S.overflow.size} of ${S.records.length} run past one page`; scan.className="scan bad"; nb.style.display="inline-flex"; }
+    renderNav();
+    if(S.mode==="preview") render();
+  }, 120);
+}
+function jumpNextBad(){
+  if(!S.overflow.size)return; if(S.mode!=="preview") setMode("preview");
+  const list=[...S.overflow].sort((a,b)=>a-b); const nextIdx=list.find(i=>i>S.pos); go(nextIdx!=null?nextIdx:list[0]);
+}
+
+/* ── template change ── */
+function onTemplateChange(){ refreshWarn(); scanAll(); render(); $("savePdf").disabled=!(S.records.length && tplText().trim()); }
+
+/* ── save as PDF ── */
+let printStyleEl=null;
+function ensurePrintStyle(){ if(!printStyleEl){printStyleEl=document.createElement("style"); document.head.append(printStyleEl);} return printStyleEl; }
+function savePdf(){
+  if(!S.records.length || !tplText().trim()){ toast("Load a CSV and write a template first"); return; }
+  const root=$("printRoot"); root.innerHTML=""; const html=getTemplate();
+  S.records.forEach(rec=>{ const sheet=el("div","sheet"); mergeInto(sheet, html, rec, false); root.append(sheet); });
+  ensurePrintStyle().textContent=`@page{ size:${$("pageSize").value}; margin:${$("margin").value}; }`+
+    `@media print{ #printRoot .sheet{ font-family:${baseFont}; font-size:${baseSize}pt; line-height:1.6; } }`;
+  const prev=document.title; document.title=($("docName").value.trim()||"Merge"); window.print(); setTimeout(()=>document.title=prev,500);
+}
+
+/* ── recipe ── */
+function saveRecipe(){
+  const r={ app:"scsj-mail-merge", version:3, docName:$("docName").value, template:getTemplate(), headerRow:S.headerRow, rename:S.rename,
+    output:{ font:baseFont, size:baseSize, page:$("pageSize").value, margin:$("margin").value, zoom:$("zoom").value } };
+  const blob=new Blob([JSON.stringify(r,null,2)],{type:"application/json"}); const a=el("a"); a.href=URL.createObjectURL(blob);
+  a.download=(r.docName.trim()||"mail-merge").replace(/[^\w.-]+/g,"_")+".recipe.json"; a.click(); URL.revokeObjectURL(a.href); toast("Recipe saved");
+}
+const SANS='system-ui,-apple-system,"Segoe UI",Roboto,sans-serif', SERIF='Georgia,"Times New Roman",serif';
+function applyRecipe(r){
+  if(r.template!=null){ if((r.version||0)>=3) setTemplate(r.template); else $("tpl").textContent=r.template; }
+  if(r.docName!=null) $("docName").value=r.docName;
+  const o=r.output||{};
+  if(o.font){ baseFont = o.font==="sans"?SANS : o.font==="serif"?SERIF : o.font; }
+  if(o.size){ baseSize=parseInt(o.size,10)||baseSize; }
+  syncFontSizeSelects();
+  if(o.page)$("pageSize").value=o.page; if(o.margin)$("margin").value=o.margin; if(o.zoom)$("zoom").value=o.zoom;
+  if(r.rename && typeof r.rename==="object") S.rename=Object.assign({},r.rename);
+  if(r.headerRow && S.rawRows.length){ S.headerRow=Math.max(1,Math.min(S.rawRows.length,r.headerRow)); $("hdrRow").value=S.headerRow; rebuildFromHeader(); renderRaw(); }
+  else { renderRename(); onTemplateChange(); }
+  toast("Recipe loaded"+(S.rawRows.length?"":" · now add a CSV"));
+}
+function syncFontSizeSelects(){
+  const fo=[...$("font").options].find(o=>o.value===baseFont); if(fo) $("font").value=baseFont;
+  const so=[...$("size").options].find(o=>+o.value===baseSize); if(so) $("size").value=String(baseSize);
+}
+
+/* ── wiring ── */
+function readText(f,cb){ const rd=new FileReader(); rd.onload=()=>cb(rd.result); rd.readAsText(f); }
+function handleCSVFile(f){ if(!f)return; readText(f,txt=>loadCSV(txt,f.name)); }
+$("drop").addEventListener("click",()=>$("csvInput").click());
+$("changeFile").addEventListener("click",()=>$("csvInput").click());
+$("csvInput").addEventListener("change",e=>{handleCSVFile(e.target.files[0]); e.target.value="";});
+$("drop").addEventListener("dragover",e=>{e.preventDefault(); $("drop").classList.add("over");});
+$("drop").addEventListener("dragleave",()=>$("drop").classList.remove("over"));
+$("drop").addEventListener("drop",e=>{e.preventDefault(); $("drop").classList.remove("over"); handleCSVFile(e.dataTransfer.files[0]);});
+
+$("hdrRow").addEventListener("change",()=>{ S.headerRow=Math.max(1,Math.min(S.rawRows.length||1,+$("hdrRow").value||1)); $("hdrRow").value=S.headerRow; rebuildFromHeader(); renderRaw(); });
+$("hdrUp").addEventListener("click",()=>{ $("hdrRow").value=Math.min(S.rawRows.length||1,S.headerRow+1); $("hdrRow").dispatchEvent(new Event("change")); });
+$("hdrDown").addEventListener("click",()=>{ $("hdrRow").value=Math.max(1,S.headerRow-1); $("hdrRow").dispatchEvent(new Event("change")); });
+
+$("tpl").addEventListener("input",onTemplateChange);
+document.querySelectorAll("#modeSeg button").forEach(b=>b.addEventListener("click",()=>setMode(b.dataset.mode)));
+$("tpl").addEventListener("blur",()=>{ const sel=document.getSelection(); if(sel&&sel.rangeCount&&$("tpl").contains(sel.anchorNode)) savedRange=sel.getRangeAt(0).cloneRange(); });
+document.addEventListener("selectionchange",()=>{
+  const sel=document.getSelection();
+  if(sel && sel.rangeCount && $("tpl").contains(sel.anchorNode)){ savedRange=sel.getRangeAt(0).cloneRange(); updateFmtState(); }
+});
+function restoreSel(){ $("tpl").focus(); if(savedRange){ const sel=document.getSelection(); sel.removeAllRanges(); sel.addRange(savedRange); } }
+function hasSel(){ return savedRange && !savedRange.collapsed; }
+function updateFmtState(){ ["bold","italic","underline"].forEach(c=>{ const b=document.querySelector(`.fmtbtn[data-cmd="${c}"]`); if(b){ try{ b.setAttribute("aria-pressed", document.queryCommandState(c)); }catch(e){} } }); }
+document.querySelectorAll(".fmtbtn").forEach(btn=>{
+  btn.addEventListener("mousedown",e=>e.preventDefault());
+  btn.addEventListener("click",()=>{ restoreSel(); document.execCommand("styleWithCSS",false,true); document.execCommand(btn.dataset.cmd); savedRange=document.getSelection().rangeCount?document.getSelection().getRangeAt(0).cloneRange():savedRange; onTemplateChange(); updateFmtState(); });
+});
+function applyFontSize(pt){
+  document.execCommand("styleWithCSS",false,false); document.execCommand("fontSize",false,"7"); document.execCommand("styleWithCSS",false,true);
+  $("tpl").querySelectorAll('font[size="7"]').forEach(f=>{ const s=document.createElement("span"); s.style.fontSize=pt+"pt"; while(f.firstChild) s.appendChild(f.firstChild); f.replaceWith(s); });
+}
+$("font").addEventListener("change",()=>{
+  const fam=$("font").value;
+  if(hasSel()){ restoreSel(); document.execCommand("styleWithCSS",false,true); document.execCommand("fontName",false,fam); onTemplateChange(); }
+  else { baseFont=fam; render(); scanAll(); }
+});
+$("size").addEventListener("change",()=>{
+  const pt=+$("size").value;
+  if(hasSel()){ restoreSel(); applyFontSize(pt); onTemplateChange(); }
+  else { baseSize=pt; render(); scanAll(); }
+});
+$("pageSize").addEventListener("change",()=>{ scanAll(); render(); });
+$("margin").addEventListener("change",()=>{ scanAll(); render(); });
+$("zoom").addEventListener("change",render);
+$("prev").addEventListener("click",()=>go(S.pos-1));
+$("next").addEventListener("click",()=>go(S.pos+1));
+$("pos").addEventListener("change",()=>go((+$("pos").value||1)-1));
+$("nextBad").addEventListener("click",jumpNextBad);
+$("savePdf").addEventListener("click",savePdf);
+$("saveRecipe").addEventListener("click",saveRecipe);
+$("loadRecipe").addEventListener("click",()=>$("recipeInput").click());
+$("recipeInput").addEventListener("change",e=>{ const f=e.target.files[0]; if(!f)return; readText(f,txt=>{ try{ applyRecipe(JSON.parse(txt)); }catch(err){ toast("Couldn’t read that recipe file"); } }); e.target.value=""; });
+let rz=null; window.addEventListener("resize",()=>{ if($("zoom").value==="fit"){ clearTimeout(rz); rz=setTimeout(render,120); } });
+$("renameToggle").addEventListener("click",()=>{ renamePanelOpen=!renamePanelOpen; $("renamePanel").hidden=!renamePanelOpen; updateRenameCount(); });
+
+baseFont=$("font").value; baseSize=+$("size").value;
+renderRename();
+render();
+</script>
+</body>
+</html>

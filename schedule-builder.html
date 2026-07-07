@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Schedule Builder</title>
+<style>
+:root{
+  --ink:#1b1d2a; --ink-soft:#4a4d63; --muted:#7c7f92;
+  --paper:#f6f5f1; --surface:#ffffff; --line:#e6e4dc; --line-strong:#d4d1c6;
+  --go:#178a63; --go-ink:#0e5c41;
+  --focus:#3b4bd8;
+  --class:#cfe0f3; --class-b:#8fb4e0;
+  --site:#cde9d6; --site-b:#7fc79c;
+  --planning:#f6e2b3; --planning-b:#dcb867;
+  --meeting:#e6cde8; --meeting-b:#c295c8;
+  --other:#dedede; --other-b:#b3b3b3;
+  --mono:ui-monospace,"SFMono-Regular","Cascadia Code","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --shadow:0 1px 2px rgba(27,29,42,.06),0 8px 24px rgba(27,29,42,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font-family:var(--sans); color:var(--ink); background:var(--paper); font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased}
+.eyebrow{font:600 10.5px/1 var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--muted)}
+.tnum{font-variant-numeric:tabular-nums}
+button{font-family:inherit}
+
+.app{max-width:1180px; margin:0 auto; padding:20px}
+header.top{display:flex; align-items:baseline; gap:12px; margin-bottom:4px}
+header.top h1{margin:0; font-size:22px; font-weight:700; letter-spacing:-.02em}
+header.top .sub{font:500 12px/1 var(--mono); color:var(--muted)}
+.lead{color:var(--ink-soft); margin:0 0 18px; max-width:70ch}
+
+.layout{display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:22px; align-items:start}
+
+.card{background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow)}
+.card .hd{padding:14px 16px 0}
+.card .bd{padding:14px 16px 16px}
+.card h2{margin:0; font-size:15px; font-weight:700; letter-spacing:-.01em}
+.card .note{font-size:12.5px; color:var(--muted); margin:2px 0 0}
+
+/* toolbar */
+.toolbar{display:flex; flex-wrap:wrap; gap:16px 22px; align-items:flex-end; padding:14px 16px; border-bottom:1px solid var(--line)}
+.field{display:flex; flex-direction:column; gap:6px}
+.field label{font:600 10.5px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+.field input.name{border:1px solid var(--line-strong); border-radius:9px; padding:9px 11px; font-size:15px; font-weight:600; min-width:230px; background:var(--paper)}
+.field input.name:focus{outline:2px solid var(--focus); outline-offset:-1px; background:var(--surface)}
+.palette{display:flex; gap:6px; flex-wrap:wrap}
+.swatch{display:inline-flex; align-items:center; gap:7px; border:1.5px solid var(--line-strong); background:var(--surface); border-radius:9px; padding:7px 11px; cursor:pointer; font-size:13px; font-weight:600; color:var(--ink-soft)}
+.swatch .dot{width:13px; height:13px; border-radius:4px; border:1px solid rgba(0,0,0,.12)}
+.swatch[aria-pressed="true"]{border-color:var(--ink); color:var(--ink); box-shadow:inset 0 0 0 1px var(--ink)}
+.swatch.erase[aria-pressed="true"]{border-color:#b0453f; box-shadow:inset 0 0 0 1px #b0453f; color:#b0453f}
+
+/* grid */
+.gridwrap{padding:8px 10px 14px; overflow:auto}
+table.grid{border-collapse:separate; border-spacing:0; width:100%; table-layout:fixed; user-select:none}
+table.grid th.corner{width:58px}
+table.grid thead th{position:sticky; top:0; z-index:3; background:var(--surface); font:600 12px/1 var(--sans); color:var(--ink-soft); padding:8px 4px 10px; text-align:center; border-bottom:1px solid var(--line-strong)}
+table.grid td.time,table.grid th.corner{position:sticky; left:0; z-index:2; background:var(--surface); font:600 10.5px/1 var(--mono); color:var(--muted); text-align:right; padding:0 8px 0 4px; white-space:nowrap; width:58px}
+table.grid td.time.hour{color:var(--ink)}
+table.grid tbody tr.hour td{border-top:1px solid var(--line)}
+.pcell{height:16px; border-right:1px solid rgba(230,228,220,.6); border-bottom:1px solid rgba(230,228,220,.35); cursor:pointer; position:relative; padding:0 5px; font-size:10.5px; color:var(--ink); overflow:hidden; white-space:nowrap}
+.pcell:hover{outline:2px solid var(--ink); outline-offset:-2px; z-index:1}
+.pcell.t-Class{background:var(--class)} .pcell.t-Site{background:var(--site)}
+.pcell.t-Planning{background:var(--planning)} .pcell.t-Meeting{background:var(--meeting)}
+.pcell.t-Other{background:var(--other)}
+.pcell.blockstart{font-weight:600}
+
+.hint{font-size:12px; color:var(--muted); padding:0 16px 14px}
+.hint kbd{font:600 11px/1 var(--mono); background:var(--paper); border:1px solid var(--line-strong); border-radius:4px; padding:1px 5px}
+
+/* blocks list */
+.blocks{display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto; margin-top:4px}
+.brow{display:grid; grid-template-columns:auto 1fr auto; gap:9px; align-items:center; border:1px solid var(--line); border-radius:10px; padding:8px 9px}
+.btag{width:11px; height:26px; border-radius:4px; flex:0 0 auto}
+.bmid{min-width:0}
+.bwhen{font-size:12.5px; font-weight:700}
+.bwhen .day{color:var(--go-ink)}
+.bnote{margin-top:5px; width:100%; border:1px solid var(--line-strong); border-radius:7px; padding:5px 7px; font-size:12.5px; background:var(--paper)}
+.bnote:focus{outline:2px solid var(--focus); outline-offset:-1px; background:var(--surface)}
+.bdel{border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:16px; line-height:1; padding:4px 6px; border-radius:6px}
+.bdel:hover{background:#faeeee; color:#b0453f}
+.blocks-empty{color:var(--muted); font-size:13px; padding:14px 4px; text-align:center; border:1.5px dashed var(--line-strong); border-radius:10px}
+
+.rowactions{display:flex; gap:9px; margin-top:14px}
+.btn{border:1px solid var(--line-strong); background:var(--surface); color:var(--ink); font-weight:600; font-size:13px; padding:9px 13px; border-radius:9px; cursor:pointer; display:inline-flex; align-items:center; gap:8px}
+.btn:hover{border-color:var(--ink-soft)}
+.btn.primary{background:var(--ink); color:#fff; border-color:var(--ink)}
+.btn.primary:hover{background:#000}
+.btn.wide{flex:1; justify-content:center}
+.btn:disabled{opacity:.45; cursor:not-allowed}
+.btn svg{width:15px;height:15px}
+
+/* batch */
+.batchcount{font:700 12px/1 var(--mono); color:var(--go-ink); background:#e9f4ef; border:1px solid #cfe8dd; border-radius:999px; padding:5px 10px}
+.people{display:flex; flex-direction:column; gap:7px; margin:4px 0 0}
+.prow{display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:10px; padding:8px 10px}
+.prow .nm{font-weight:600; font-size:13.5px; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.prow .ct{font:600 11px/1 var(--mono); color:var(--muted)}
+.prow .mini{border:0; background:transparent; cursor:pointer; color:var(--muted); font:600 11px/1 var(--mono); padding:3px 6px; border-radius:6px}
+.prow .mini:hover{background:var(--paper); color:var(--ink)}
+.prow .mini.del:hover{background:#faeeee; color:#b0453f}
+.people-empty{color:var(--muted); font-size:13px; padding:14px 4px; text-align:center; border:1.5px dashed var(--line-strong); border-radius:10px}
+
+.export{margin-top:14px; display:flex; flex-direction:column; gap:9px}
+.export .opt{display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--ink-soft)}
+.export .opt input{width:15px; height:15px; accent-color:var(--go)}
+.preview{margin-top:10px}
+.preview .eyebrow{margin-bottom:6px}
+.preview textarea{width:100%; height:120px; border:1px solid var(--line-strong); border-radius:9px; padding:9px; font:12px/1.5 var(--mono); background:var(--paper); color:var(--ink-soft); resize:vertical; white-space:pre; overflow:auto}
+
+.toast{position:fixed; bottom:18px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--ink); color:#fff; padding:10px 16px; border-radius:10px; font-size:13px; font-weight:600; opacity:0; pointer-events:none; transition:.25s; z-index:80; box-shadow:var(--shadow)}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+footer{color:var(--muted); font-size:11.5px; margin-top:18px; text-align:center}
+
+@media (max-width:900px){ .layout{grid-template-columns:1fr} }
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Schedule Builder</h1>
+    <span class="sub">paint a week → rows for the Schedule tab</span>
+  </header>
+  <p class="lead">Type a name, pick a category, and drag across the grid to block out busy time. Each solid run becomes one row. Queue as many people as you like, then copy the rows straight into the <b>Schedule</b> tab (or download a CSV).</p>
+
+  <div class="layout">
+    <!-- LEFT: builder -->
+    <section class="card">
+      <div class="toolbar">
+        <div class="field">
+          <label for="personName">Person</label>
+          <input class="name" id="personName" placeholder="e.g. Jordan Rivera" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Category to paint</label>
+          <div class="palette" id="palette"></div>
+        </div>
+      </div>
+      <div class="gridwrap"><table class="grid" id="grid"></table></div>
+      <div class="hint">Drag to paint, drag with <b>Erase</b> to clear. One contiguous run in a day = one row. Add a note to each block on the right, and it becomes the block's label in the Week view.</div>
+    </section>
+
+    <!-- RIGHT: blocks + batch -->
+    <div style="display:flex; flex-direction:column; gap:22px">
+      <section class="card">
+        <div class="hd"><h2>This person's blocks</h2><p class="note" id="blocksNote">Nothing painted yet.</p></div>
+        <div class="bd">
+          <div class="blocks" id="blocks"></div>
+          <div class="rowactions">
+            <button class="btn primary wide" id="addBatch">Add to batch</button>
+            <button class="btn" id="clearGrid">Clear</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="hd" style="display:flex; align-items:center; justify-content:space-between">
+          <h2>Batch</h2><span class="batchcount" id="batchCount">0 rows</span>
+        </div>
+        <div class="bd">
+          <div class="people" id="people"></div>
+          <div class="export">
+            <button class="btn primary wide" id="copyRows">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+              Copy rows
+            </button>
+            <button class="btn wide" id="downloadCsv">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+              Download .csv
+            </button>
+            <label class="opt"><input type="checkbox" id="inclHeader"> Include header row when copying</label>
+          </div>
+          <div class="preview">
+            <div class="eyebrow">Preview — Person · Day · Start · End · Type · Note</div>
+            <textarea id="preview" readonly spellcheck="false" placeholder="Rows you add will appear here, ready to paste."></textarea>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <footer>Runs entirely in your browser. Nothing is uploaded, and no data is stored.</footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const TYPES = ["Class","Site","Planning","Other"];
+const TYPE_COLOR = {Class:"var(--class-b)",Site:"var(--site-b)",Planning:"var(--planning-b)",Other:"var(--other-b)"};
+const START_MIN = 8*60, END_MIN = 21*60, STEP = 15;         // 8:00 AM .. 9:00 PM
+const SLOTS = [];                                            // start minute of each paintable slot
+for(let m=START_MIN; m<END_MIN; m+=STEP) SLOTS.push(m);      // last = 20:45 (covers 8:45–9:00 PM)
+const nSlot = SLOTS.length, nDay = DAYS.length;
+
+// state
+let activeType = "Class";            // or "__erase__"
+let cells = new Uint8Array(nDay*nSlot); // 0 = free, else index+1 into TYPES
+let notes = {};                       // key `${day}:${startSlot}` -> note text
+let batch = [];                       // [{name, rows:[[Person,Day,Start,End,Type,Note],...]}]
+
+const el=(t,c,txt)=>{const e=document.createElement(t); if(c)e.className=c; if(txt!=null)e.textContent=txt; return e;};
+function fmtTime(min){ let h=Math.floor(min/60), m=min%60, ap=h>=12?"PM":"AM", hh=h%12||12; return `${hh}:${String(m).padStart(2,"0")} ${ap}`; }
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),1900); }
+const key=(d,s)=>d*nSlot+s;
+
+/* ---------- palette ---------- */
+function buildPalette(){
+  const host=document.getElementById("palette");
+  TYPES.forEach(tp=>{
+    const b=el("button","swatch"); b.dataset.type=tp; b.setAttribute("aria-pressed", tp===activeType);
+    const dot=el("span","dot"); dot.style.background=TYPE_COLOR[tp];
+    b.append(dot, document.createTextNode(tp));
+    b.addEventListener("click",()=>setActive(tp));
+    host.append(b);
+  });
+  const er=el("button","swatch erase"); er.dataset.type="__erase__"; er.setAttribute("aria-pressed","false");
+  const d=el("span","dot"); d.style.background="repeating-linear-gradient(45deg,#ddd,#ddd 3px,#fff 3px,#fff 6px)";
+  er.append(d, document.createTextNode("Erase"));
+  er.addEventListener("click",()=>setActive("__erase__"));
+  host.append(er);
+}
+function setActive(tp){ activeType=tp;
+  document.querySelectorAll("#palette .swatch").forEach(s=>s.setAttribute("aria-pressed", s.dataset.type===tp));
+}
+
+/* ---------- grid ---------- */
+let painting=false, paintVal=0;
+function buildGrid(){
+  const t=document.getElementById("grid"); t.innerHTML="";
+  const thead=el("thead"), htr=el("tr"); htr.append(el("th","corner"));
+  DAYS.forEach(d=>htr.append(el("th",null,d.slice(0,3)))); thead.append(htr); t.append(thead);
+  const tb=el("tbody"); t._cells=[];
+  SLOTS.forEach((mn,s)=>{
+    const onhour=mn%60===0;
+    const tr=el("tr", onhour?"hour":null);
+    const tc=el("td","time"+(onhour?" hour":"")); tc.textContent= onhour?fmtTime(mn).replace(":00",""):(mn%30===0?"·":"");
+    tr.append(tc);
+    for(let d=0; d<nDay; d++){
+      const td=el("td"); const c=el("div","pcell"); td.append(c); tr.append(td);
+      c.dataset.d=d; c.dataset.s=s; t._cells[key(d,s)]=c;
+      c.addEventListener("mousedown",e=>{e.preventDefault(); startPaint(d,s);});
+      c.addEventListener("mouseenter",()=>{ if(painting) applyPaint(d,s); });
+      c.addEventListener("touchstart",e=>{e.preventDefault(); startPaint(d,s);},{passive:false});
+    }
+    tb.append(tr);
+  });
+  t.append(tb);
+  // touch drag
+  t.addEventListener("touchmove",e=>{
+    if(!painting)return; const tch=e.touches[0]; const eltAt=document.elementFromPoint(tch.clientX,tch.clientY);
+    if(eltAt&&eltAt.classList.contains("pcell")) applyPaint(+eltAt.dataset.d,+eltAt.dataset.s);
+  },{passive:true});
+}
+function startPaint(d,s){
+  painting=true;
+  paintVal = activeType==="__erase__" ? 0 : TYPES.indexOf(activeType)+1;
+  applyPaint(d,s);
+}
+function applyPaint(d,s){ cells[key(d,s)]=paintVal; paintCell(d,s); scheduleRecompute(); }
+function paintCell(d,s){
+  const c=document.getElementById("grid")._cells[key(d,s)];
+  c.className="pcell";
+  const v=cells[key(d,s)];
+  if(v){ const tp=TYPES[v-1]; c.classList.add("t-"+tp);
+    const isStart = s===0 || cells[key(d,s-1)]!==v;
+    if(isStart){ c.classList.add("blockstart"); const n=notes[`${d}:${s}`]; c.textContent = n||""; }
+    else c.textContent="";
+  } else c.textContent="";
+}
+window.addEventListener("mouseup",()=>painting=false);
+window.addEventListener("touchend",()=>painting=false);
+
+/* ---------- compute blocks ---------- */
+function computeBlocks(){
+  const blocks=[];
+  for(let d=0; d<nDay; d++){
+    let run=null;
+    for(let s=0; s<nSlot; s++){
+      const v=cells[key(d,s)];
+      if(v && (!run || run.v!==v)){ if(run) blocks.push(run); run={d, s0:s, s1:s, v}; }
+      else if(v && run && run.v===v){ run.s1=s; }
+      else if(!v && run){ blocks.push(run); run=null; }
+    }
+    if(run) blocks.push(run);
+  }
+  return blocks.map(b=>({
+    day:DAYS[b.d], d:b.d, s0:b.s0,
+    startMin:SLOTS[b.s0], endMin:SLOTS[b.s1]+STEP,
+    type:TYPES[b.v-1], noteKey:`${b.d}:${b.s0}`
+  }));
+}
+
+/* ---------- render blocks list ---------- */
+let recomputeTimer=null;
+function scheduleRecompute(){ clearTimeout(recomputeTimer); recomputeTimer=setTimeout(renderBlocks,30); }
+function renderBlocks(){
+  const host=document.getElementById("blocks"); host.innerHTML="";
+  const blocks=computeBlocks();
+  document.getElementById("blocksNote").textContent =
+    blocks.length? `${blocks.length} block${blocks.length===1?"":"s"} → ${blocks.length} row${blocks.length===1?"":"s"}` : "Nothing painted yet.";
+  if(!blocks.length){ host.append(el("div","blocks-empty","Drag across the grid to add busy blocks.")); return; }
+  blocks.forEach(b=>{
+    const row=el("div","brow");
+    const tag=el("div","btag"); tag.style.background=TYPE_COLOR[b.type];
+    const mid=el("div","bmid");
+    const when=el("div","bwhen"); when.innerHTML=`<span class="day">${b.day}</span> · ${fmtTime(b.startMin)}–${fmtTime(b.endMin)} <span style="color:var(--muted);font-weight:600">· ${b.type}</span>`;
+    const note=el("input","bnote"); note.placeholder="note / label (optional)"; note.value=notes[b.noteKey]||"";
+    note.addEventListener("input",()=>{ notes[b.noteKey]=note.value; paintCell(b.d,b.s0); });
+    mid.append(when, note);
+    const del=el("button","bdel","×"); del.title="Remove block";
+    del.addEventListener("click",()=>{ for(let s=b.s0; SLOTS[s]<b.endMin && s<nSlot; s++) cells[key(b.d,s)]=0; delete notes[b.noteKey]; repaintAll(); renderBlocks(); });
+    row.append(tag, mid, del);
+    host.append(row);
+  });
+}
+function repaintAll(){ for(let d=0; d<nDay; d++) for(let s=0; s<nSlot; s++) paintCell(d,s); }
+
+/* ---------- batch + export ---------- */
+function rowsForCurrent(){
+  const name=document.getElementById("personName").value.trim();
+  return computeBlocks().map(b=>[name, b.day, fmtTime(b.startMin), fmtTime(b.endMin), b.type, notes[b.noteKey]||""]);
+}
+function addToBatch(){
+  const name=document.getElementById("personName").value.trim();
+  const blocks=computeBlocks();
+  if(!name){ toast("Add a name first"); document.getElementById("personName").focus(); return; }
+  if(!blocks.length){ toast("Paint at least one block"); return; }
+  batch.push({name, rows:rowsForCurrent()});
+  clearGrid(true); document.getElementById("personName").value=""; document.getElementById("personName").focus();
+  renderBatch(); toast(`Added ${name}`);
+}
+function clearGrid(silent){ cells=new Uint8Array(nDay*nSlot); notes={}; repaintAll(); renderBlocks(); if(!silent) toast("Cleared"); }
+function editPerson(i){
+  const p=batch[i];
+  // load back into grid
+  clearGrid(true);
+  document.getElementById("personName").value=p.name;
+  p.rows.forEach(r=>{
+    const d=DAYS.indexOf(r[1]); const sm=parseMin(r[2]), em=parseMin(r[3]); const ti=TYPES.indexOf(r[4]);
+    for(let s=0;s<nSlot;s++){ if(SLOTS[s]>=sm && SLOTS[s]<em){ cells[key(d,s)]=ti+1; } }
+    const s0=SLOTS.findIndex(x=>x===sm); if(s0>=0 && r[5]) notes[`${d}:${s0}`]=r[5];
+  });
+  batch.splice(i,1); repaintAll(); renderBlocks(); renderBatch();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+function parseMin(str){ const m=str.match(/(\d+):(\d+)\s*(AM|PM)/i); let h=+m[1]%12; if(/pm/i.test(m[3]))h+=12; return h*60 + +m[2]; }
+function renderBatch(){
+  const host=document.getElementById("people"); host.innerHTML="";
+  if(!batch.length){ host.append(el("div","people-empty","No one queued yet. Build a week and click “Add to batch.”")); }
+  batch.forEach((p,i)=>{
+    const row=el("div","prow");
+    row.append(el("div","nm",p.name));
+    row.append(el("div","ct",`${p.rows.length} row${p.rows.length===1?"":"s"}`));
+    const ed=el("button","mini","edit"); ed.addEventListener("click",()=>editPerson(i));
+    const del=el("button","mini del","remove"); del.addEventListener("click",()=>{batch.splice(i,1); renderBatch();});
+    row.append(ed, del); host.append(row);
+  });
+  const total=batch.reduce((a,p)=>a+p.rows.length,0);
+  document.getElementById("batchCount").textContent = `${total} row${total===1?"":"s"}`;
+  updatePreview();
+}
+const HEADER=["Person","Day","Start","End","Type","Note"];
+function allRows(){ return batch.flatMap(p=>p.rows); }
+function toTSV(withHeader){ const rows=allRows(); const body=rows.map(r=>r.join("\t")); return (withHeader?[HEADER.join("\t"),...body]:body).join("\n"); }
+function csvCell(v){ v=String(v); return /[",\n]/.test(v)? '"'+v.replace(/"/g,'""')+'"' : v; }
+function toCSV(){ const rows=allRows(); return [HEADER, ...rows].map(r=>r.map(csvCell).join(",")).join("\r\n"); }
+function updatePreview(){
+  const withH=document.getElementById("inclHeader").checked;
+  document.getElementById("preview").value = allRows().length? toTSV(withH) : "";
+}
+
+async function copyRows(){
+  if(!allRows().length){ toast("Nothing to copy yet"); return; }
+  const text=toTSV(document.getElementById("inclHeader").checked);
+  try{ await navigator.clipboard.writeText(text); toast(`Copied ${allRows().length} rows`); }
+  catch(e){ const ta=document.getElementById("preview"); ta.focus(); ta.select();
+    try{ document.execCommand("copy"); toast(`Copied ${allRows().length} rows`);}catch(_){ toast("Select the preview and copy manually"); } }
+}
+function downloadCsv(){
+  if(!allRows().length){ toast("Nothing to export yet"); return; }
+  const blob=new Blob([toCSV()],{type:"text/csv"}); const a=el("a");
+  a.href=URL.createObjectURL(blob); a.download="schedules.csv"; a.click(); URL.revokeObjectURL(a.href);
+  toast("Downloaded schedules.csv");
+}
+
+/* ---------- init ---------- */
+buildPalette(); buildGrid(); renderBlocks(); renderBatch();
+document.getElementById("addBatch").addEventListener("click",addToBatch);
+document.getElementById("clearGrid").addEventListener("click",()=>clearGrid(false));
+document.getElementById("copyRows").addEventListener("click",copyRows);
+document.getElementById("downloadCsv").addEventListener("click",downloadCsv);
+document.getElementById("inclHeader").addEventListener("change",updatePreview);
+</script>
+</body>
+</html>
